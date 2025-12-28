@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, Type, Schema } from "@google/genai";
-import { SunoResponse, GenerationMode, GroundingSource } from "../types";
+import { SunoResponse, GenerationMode, GroundingSource, SearchEngine } from "../types";
 import { fileToGenerativePart } from "../utils";
 
 const SYSTEM_INSTRUCTION = `
@@ -13,6 +13,8 @@ const SYSTEM_INSTRUCTION = `
 3. **「analysis」フィールドの冒頭に必ず以下の形式で記述してください：**
    「特定した動画：[動画タイトル] / 投稿者：[アーティスト名]」
 4. もしタイトルが特定できない場合は、推測せず「動画の詳細を特定できませんでした」と記述してください。
+5. **動画情報の後に、どのような音楽なのか（ジャンル、雰囲気、特徴など）を簡潔な文章で追記してください。**
+   例：「... / 投稿者：Airis。疾走感のあるピアノとエモーショナルなボーカルが特徴的な、切ないJ-Popロックナンバーです。」
 
 ## 音楽解析のポイント
 - 特定した楽曲の「ジャンル（例：Dark EDM, Phonk, J-Pop）」「BPM/テンポ感」「使用されている特徴的な楽器」「ボーカルの雰囲気（中性的、ダウナー、力強い等）」を分析してください。
@@ -21,12 +23,21 @@ const SYSTEM_INSTRUCTION = `
 ## 構成ルール
 - [Intro], [Verse], [Chorus], [Bridge], [Drop], [Outro] などのメタタグを効果的に使用。
 - 歌詞は動画の世界観を踏襲し、かつSunoで生成した際に中毒性が出るように構成。
+
+## 禁止事項とアレンジルール（最重要）
+1. **「タイトル」および「歌詞」の完全コピーは厳禁です。** 元の楽曲や動画の要素をそのまま出力しないでください。
+2. YouTube動画を解析する場合、動画の概要欄、コメント欄、背景情報、投稿者のマインドなどを深く読み取り、**必ず独自の解釈やアレンジを加えてください。**
+3. 元の世界観やメッセージ性は尊重しつつ、Suno.aiで生成した際に「新しい魅力」が生まれるように、言葉選びや構成にオリジナリティを持たせてください。
+
+## タイトル候補のルール（厳守）
+- タイトル候補（titleCandidates）は必ず「日本語 / English」の形式で出力してください。
+- 例: 「夜に駆ける / Racing Into The Night」「電脳都市 / Cybernetic City」
 `;
 
 const selectionSchema = {
   type: Type.OBJECT,
   properties: {
-    title: { type: Type.STRING },
+    title: { type: Type.STRING, description: "Bilingual format: 日本語タイトル / English Title" },
     style: { type: Type.STRING },
     instrumental: { type: Type.BOOLEAN },
     content: { type: Type.STRING, description: "Full lyrics or structure using v4.5 metatags." },
@@ -38,16 +49,16 @@ const selectionSchema = {
 const responseSchema: Schema = {
   type: Type.OBJECT,
   properties: {
-    analysis: { type: Type.STRING, description: "Must start with identified Video Title and Creator." },
+    analysis: { type: Type.STRING, description: "Must start with identified Video Title/Creator, followed by a brief musical description." },
     titleCandidates: {
       type: Type.ARRAY,
       items: { type: Type.STRING },
-      description: "5 thematic titles.",
+      description: "Exactly 5 bilingual titles in format: 日本語 / English",
     },
     styleCandidates: {
       type: Type.ARRAY,
       items: { type: Type.STRING },
-      description: "5 style prompts (English tags).",
+      description: "Exactly 5 different style prompts (English tags only).",
     },
     bestSelection: { ...selectionSchema },
     alternativeSelection: { ...selectionSchema },
@@ -59,15 +70,83 @@ const responseSchema: Schema = {
  * Extracts YouTube Video ID from URL
  */
 const extractYouTubeId = (url: string): string | null => {
-  const regExp = /^.*((youtu.be\/)|(v\/)|(\/u\/\w\/)|(embed\/)|(watch\?))\??v?=?([^#&?]*).*/;
-  const match = url.match(regExp);
-  return (match && match[7].length === 11) ? match[7] : null;
+  const patterns = [
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/,
+    /youtube\.com\/v\/([a-zA-Z0-9_-]{11})/
+  ];
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match) return match[1];
+  }
+  return null;
+};
+
+/**
+ * Search using Google Custom Search API
+ */
+const searchWithGoogleCustom = async (query: string): Promise<string> => {
+  const apiKey = (process.env as any).GOOGLE_CUSTOM_SEARCH_API_KEY;
+  const cx = (process.env as any).GOOGLE_CUSTOM_SEARCH_CX;
+
+  if (!apiKey || !cx) {
+    return "Google Custom Search API key or CX not configured. Please set GOOGLE_CUSTOM_SEARCH_API_KEY and GOOGLE_CUSTOM_SEARCH_CX in .env.local.";
+  }
+
+  try {
+    const url = `https://www.googleapis.com/customsearch/v1?key=${apiKey}&cx=${cx}&q=${encodeURIComponent(query)}&num=5`;
+    const response = await fetch(url);
+    const data = await response.json();
+
+    if (data.items && data.items.length > 0) {
+      return data.items.map((item: any) => `- ${item.title}: ${item.snippet}`).join('\n');
+    }
+    return "No results found.";
+  } catch (error) {
+    console.error("Google Custom Search error:", error);
+    return "Search failed.";
+  }
+};
+
+/**
+ * Search using Tavily API
+ */
+const searchWithTavily = async (query: string): Promise<string> => {
+  const apiKey = (process.env as any).TAVILY_API_KEY;
+
+  if (!apiKey) {
+    return "Tavily API key not configured. Please set TAVILY_API_KEY in .env.local.";
+  }
+
+  try {
+    const response = await fetch('https://api.tavily.com/search', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        api_key: apiKey,
+        query: query,
+        search_depth: 'basic',
+        max_results: 5
+      })
+    });
+    const data = await response.json();
+
+    if (data.results && data.results.length > 0) {
+      return data.results.map((r: any) => `- ${r.title}: ${r.content}`).join('\n');
+    }
+    return "No results found.";
+  } catch (error) {
+    console.error("Tavily search error:", error);
+    return "Search failed.";
+  }
 };
 
 export const generateSunoPrompt = async (
   text: string,
   file: File | null,
-  mode: GenerationMode = GenerationMode.AUTO
+  mode: GenerationMode = GenerationMode.AUTO,
+  options: { searchEngine: SearchEngine; modelName: string; enableVideoAnalysis?: boolean } = { searchEngine: 'google-grounding', modelName: 'gemini-3-flash-preview', enableVideoAnalysis: false }
 ): Promise<SunoResponse> => {
   try {
     const apiKey = process.env.API_KEY;
@@ -76,44 +155,83 @@ export const generateSunoPrompt = async (
     }
 
     const genAI = new GoogleGenAI({ apiKey: apiKey });
-    const modelName = 'gemini-3-flash-preview';
-    
+    const modelName = options.modelName;
+
     const parts: any[] = [];
     if (file) {
       const mediaPart = await fileToGenerativePart(file);
       parts.push(mediaPart);
     }
-    
+
     let prompt = `Current Generation Mode: ${mode}. \n`;
-    
-    if (text) {
-      const videoId = extractYouTubeId(text);
-      if (videoId) {
-        prompt += `TARGET IDENTIFICATION: YouTube Video ID is "${videoId}".\n`;
-        prompt += `1. Search for the EXACT title and artist of YouTube video ID: ${videoId}.\n`;
-        prompt += `2. DO NOT confuse it with popular songs or playlist context. Focus ONLY on this video ID.\n`;
-        prompt += `3. Verify if it is "VOID" by Refrain Girl (AIris) or whatever the actual content is.\n`;
-        prompt += `4. Based on its "Dark EDM" or actual genre, create the prompts.\n`;
-      } else {
-        prompt += `Input: ${text}\n`;
+    let externalSearchResults = '';
+    const videoId = text ? extractYouTubeId(text) : null;
+
+    // If video analysis is enabled and we have a YouTube URL, add video as fileData
+    if (videoId && options.enableVideoAnalysis) {
+      const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
+      parts.push({
+        fileData: {
+          fileUri: youtubeUrl,
+          mimeType: "video/*"
+        }
+      });
+      prompt += `VIDEO ANALYSIS MODE: Analyze the actual video content at ${youtubeUrl}.\n`;
+      prompt += `1. Watch and analyze the video's visual content, music, and audio.\n`;
+      prompt += `2. Identify the genre, mood, BPM, instruments, and vocal style from the actual content.\n`;
+      prompt += `3. Transcribe any lyrics or vocals you hear.\n`;
+      prompt += `4. Base your Suno prompt on this direct analysis, not external search.\n`;
+    } else if (videoId) {
+      prompt += `TARGET IDENTIFICATION: YouTube Video ID is "${videoId}".\n`;
+      const searchQuery = `YouTube video ID ${videoId} title artist`;
+
+      switch (options.searchEngine) {
+        case 'google-grounding':
+          // Will use built-in grounding, add instructions
+          prompt += `1. Search for the EXACT title and artist of YouTube video ID: ${videoId}.\n`;
+          prompt += `2. DO NOT confuse it with popular songs or playlist context. Focus ONLY on this video ID.\n`;
+          prompt += `3. Verify the actual content based on your search.\n`;
+          prompt += `4. Based on its actual genre, create the prompts.\n`;
+          break;
+        case 'google-custom':
+          externalSearchResults = await searchWithGoogleCustom(searchQuery);
+          prompt += `External Search Results (Google Custom Search):\n${externalSearchResults}\n`;
+          prompt += `Use the above search results to identify the video and create prompts.\n`;
+          break;
+        case 'tavily':
+          externalSearchResults = await searchWithTavily(searchQuery);
+          prompt += `External Search Results (Tavily AI Search):\n${externalSearchResults}\n`;
+          prompt += `Use the above search results to identify the video and create prompts.\n`;
+          break;
+        case 'none':
+          prompt += `Note: Search is disabled. Use only provided text/media context.\n`;
+          break;
       }
+    } else if (text) {
+      prompt += `Input: ${text}\n`;
     } else if (!file) {
       prompt += "Create a high-quality, modern music concept.";
     }
-    
+
     parts.push({ text: prompt });
+
+    const config: any = {
+      systemInstruction: SYSTEM_INSTRUCTION,
+      responseMimeType: "application/json",
+      responseSchema: responseSchema,
+      temperature: 0.1,
+      topP: 0.1,
+    };
+
+    // Only use built-in Google Search for google-grounding
+    if (options.searchEngine === 'google-grounding') {
+      config.tools = [{ googleSearch: {} }];
+    }
 
     const result = await genAI.models.generateContent({
       model: modelName,
       contents: { parts: parts },
-      config: {
-        systemInstruction: SYSTEM_INSTRUCTION,
-        responseMimeType: "application/json",
-        responseSchema: responseSchema,
-        tools: [{ googleSearch: {} }],
-        temperature: 0.1, // Set even lower to be deterministic
-        topP: 0.1,       // Reduce diversity to focus on search facts
-      },
+      config: config,
     });
 
     if (!result.text) {
@@ -122,7 +240,7 @@ export const generateSunoPrompt = async (
 
     const jsonResponse = JSON.parse(result.text) as SunoResponse;
 
-    // Extract grounding sources
+    // Extract grounding sources (only available for google-grounding)
     const sources: GroundingSource[] = [];
     const chunks = result.candidates?.[0]?.groundingMetadata?.groundingChunks;
     if (chunks) {
@@ -137,7 +255,7 @@ export const generateSunoPrompt = async (
     }
 
     const uniqueSources = Array.from(new Map(sources.map(s => [s.uri, s])).values());
-    
+
     return {
       ...jsonResponse,
       sources: uniqueSources.length > 0 ? uniqueSources : undefined

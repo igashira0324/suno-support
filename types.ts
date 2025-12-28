@@ -11,6 +11,10 @@ export enum GenerationMode {
   INSTRUMENTAL = 'INSTRUMENTAL'
 }
 
+export type GeminiModel = 'gemini-3-flash-preview' | 'gemini-2.0-flash' | 'gemini-2.5-flash';
+
+export type SearchEngine = 'google-grounding' | 'google-custom' | 'tavily' | 'none';
+
 export interface SongSelection {
   title: string;
   style: string;
@@ -41,4 +45,7 @@ export interface AppState {
   isLoading: boolean;
   result: SunoResponse | null;
   error: string | null;
+  searchEngine: SearchEngine;
+  modelName: GeminiModel;
+  enableVideoAnalysis: boolean;
 }

@@ -10,14 +10,29 @@ const App: React.FC = () => {
     inputText: '',
     mediaFile: null,
     mediaType: MediaType.NONE,
-    generationMode: GenerationMode.AUTO,
+    generationMode: GenerationMode.VOCAL,
     isLoading: false,
     result: null,
     error: null,
+    searchEngine: 'none',
+    modelName: 'gemini-3-flash-preview',
+    enableVideoAnalysis: false,
   });
 
   const handleTextChange = (text: string) => {
     setState(prev => ({ ...prev, inputText: text }));
+  };
+
+  const handleSearchEngineChange = (engine: any) => {
+    setState(prev => ({ ...prev, searchEngine: engine }));
+  };
+
+  const handleModelChange = (model: any) => {
+    setState(prev => ({ ...prev, modelName: model }));
+  };
+
+  const handleVideoAnalysisToggle = (enabled: boolean) => {
+    setState(prev => ({ ...prev, enableVideoAnalysis: enabled }));
   };
 
   const handleFileSelect = (file: File | null, type: MediaType) => {
@@ -41,9 +56,10 @@ const App: React.FC = () => {
 
     try {
       const result = await generateSunoPrompt(
-        state.inputText, 
-        state.mediaFile, 
-        state.generationMode
+        state.inputText,
+        state.mediaFile,
+        state.generationMode,
+        { searchEngine: state.searchEngine, modelName: state.modelName, enableVideoAnalysis: state.enableVideoAnalysis }
       );
       setState(prev => ({ ...prev, isLoading: false, result }));
     } catch (error) {
@@ -59,7 +75,7 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen flex flex-col bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-950 via-slate-950 to-black">
-      
+
       {/* Header */}
       <header className="border-b border-white/5 bg-slate-950/50 backdrop-blur-sm sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
@@ -80,19 +96,8 @@ const App: React.FC = () => {
 
       {/* Main Content */}
       <main className="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        
-        {/* Hero / Intro text if no result yet */}
-        {!state.result && !state.isLoading && (
-          <div className="text-center mb-12 animate-in fade-in zoom-in duration-700">
-            <h2 className="text-3xl sm:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-indigo-200 via-white to-indigo-200 mb-4 drop-shadow-2xl">
-              次なるヒット曲をデザインしよう
-            </h2>
-            <p className="text-lg text-slate-400 max-w-2xl mx-auto">
-              画像や動画をアップロード、またはイメージを言葉にするだけで、<br className="hidden sm:block" />
-              AIがSuno v4.5に最適なプロンプトと歌詞を構築します。
-            </p>
-          </div>
-        )}
+
+        {/* Hero section removed per user request */}
 
         <div className="space-y-16">
           <InputSection
@@ -105,6 +110,12 @@ const App: React.FC = () => {
             mediaFile={state.mediaFile}
             generationMode={state.generationMode}
             onModeChange={handleModeChange}
+            searchEngine={state.searchEngine}
+            onSearchEngineChange={handleSearchEngineChange}
+            modelName={state.modelName}
+            onModelChange={handleModelChange}
+            enableVideoAnalysis={state.enableVideoAnalysis}
+            onVideoAnalysisToggle={handleVideoAnalysisToggle}
           />
 
           {state.error && (

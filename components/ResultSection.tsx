@@ -10,28 +10,64 @@ interface ResultSectionProps {
 const CopyButton: React.FC<{ text: string; label?: string }> = ({ text, label }) => {
   const [copied, setCopied] = useState(false);
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const handleCopy = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!text) return;
+
+    try {
+      // Primary method: Clipboard API - Works in HTTPS or localhost
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+        return;
+      }
+
+      // Fallback method: textarea hack for non-secure contexts or older browsers
+      const textArea = document.createElement("textarea");
+      textArea.value = text;
+      textArea.style.position = "fixed";
+      textArea.style.left = "-9999px";
+      textArea.style.top = "0";
+      textArea.style.opacity = "0";
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+
+      try {
+        const successful = document.execCommand('copy');
+        if (successful) {
+          setCopied(true);
+          setTimeout(() => setCopied(false), 2000);
+        }
+      } catch (err) {
+        console.error('Fallback copy failed:', err);
+      }
+      document.body.removeChild(textArea);
+    } catch (err) {
+      console.error('Copy failed:', err);
+    }
   };
+
+  const showLabel = label && label.trim().length > 0;
 
   return (
     <button
       onClick={handleCopy}
-      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800/50 hover:bg-indigo-500/20 border border-slate-700 hover:border-indigo-500/50 transition-all text-xs font-medium text-slate-400 hover:text-indigo-300 group"
+      type="button"
+      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800/80 hover:bg-indigo-500/30 border border-slate-700 hover:border-indigo-500/50 transition-all text-xs font-medium text-slate-400 hover:text-indigo-300 group ${copied ? 'text-emerald-400 border-emerald-500/50 bg-emerald-900/20' : ''}`}
       title="クリップボードにコピー"
     >
       {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-      {label || (copied ? "コピー完了" : "コピー")}
+      {copied ? "コピー完了" : (showLabel ? label : "コピー")}
     </button>
   );
 };
 
-const SongCard: React.FC<{ 
-  selection: SongSelection; 
-  label: string; 
-  isAlternative?: boolean; 
+const SongCard: React.FC<{
+  selection: SongSelection;
+  label: string;
+  isAlternative?: boolean;
 }> = ({ selection, label, isAlternative = false }) => {
   const borderColor = isAlternative ? 'border-pink-500/30' : 'border-indigo-500/30';
   const glowColor = isAlternative ? 'shadow-pink-900/20' : 'shadow-indigo-900/20';
@@ -40,7 +76,7 @@ const SongCard: React.FC<{
   return (
     <div className={`bg-gradient-to-br from-slate-900 to-slate-950 border ${borderColor} rounded-2xl p-1 overflow-hidden shadow-2xl ${glowColor}`}>
       <div className="bg-slate-950/90 rounded-xl p-6 sm:p-8 backdrop-blur-xl relative">
-        
+
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8 pb-6 border-b border-slate-800">
           <div className="w-full">
@@ -58,9 +94,9 @@ const SongCard: React.FC<{
               {selection.title}
             </h2>
             {selection.comment && (
-               <p className="text-sm text-slate-400 italic">
-                 💡 {selection.comment}
-               </p>
+              <p className="text-sm text-slate-400 italic">
+                💡 {selection.comment}
+              </p>
             )}
           </div>
         </div>
@@ -100,7 +136,7 @@ const SongCard: React.FC<{
 const ResultSection: React.FC<ResultSectionProps> = ({ data }) => {
   return (
     <div className="w-full max-w-4xl mx-auto space-y-10 animate-in fade-in slide-in-from-bottom-8 duration-700">
-      
+
       {/* Analysis Card */}
       <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 backdrop-blur-md">
         <div className="flex items-center gap-2 mb-3 text-indigo-400">
@@ -110,7 +146,7 @@ const ResultSection: React.FC<ResultSectionProps> = ({ data }) => {
         <p className="text-slate-300 leading-relaxed mb-4">
           {data.analysis}
         </p>
-        
+
         {/* Sources / Grounding */}
         {data.sources && data.sources.length > 0 && (
           <div className="mt-4 pt-4 border-t border-slate-800">
@@ -120,10 +156,10 @@ const ResultSection: React.FC<ResultSectionProps> = ({ data }) => {
             </div>
             <div className="flex flex-wrap gap-2">
               {data.sources.map((source, i) => (
-                <a 
-                  key={i} 
-                  href={source.uri} 
-                  target="_blank" 
+                <a
+                  key={i}
+                  href={source.uri}
+                  target="_blank"
                   rel="noopener noreferrer"
                   className="text-xs px-2 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-indigo-300 rounded flex items-center gap-1.5 transition-colors"
                 >
@@ -139,17 +175,17 @@ const ResultSection: React.FC<ResultSectionProps> = ({ data }) => {
         {/* Title Candidates */}
         <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 backdrop-blur-md flex flex-col">
           <div className="flex items-center justify-between mb-4">
-             <div className="flex items-center gap-2 text-pink-400">
-               <FileText className="w-5 h-5" />
-               <h3 className="font-semibold uppercase tracking-wider text-sm">タイトル候補</h3>
-             </div>
+            <div className="flex items-center gap-2 text-pink-400">
+              <FileText className="w-5 h-5" />
+              <h3 className="font-semibold uppercase tracking-wider text-sm">タイトル候補</h3>
+            </div>
           </div>
           <ul className="space-y-3 flex-1">
             {data.titleCandidates.map((title, idx) => (
               <li key={idx} className="flex items-center justify-between p-3 rounded-xl bg-slate-950/50 hover:bg-slate-800/50 transition-colors group border border-transparent hover:border-slate-700">
                 <span className="text-sm text-slate-200">{title}</span>
-                <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                  <CopyButton text={title} label=" " />
+                <div className="transition-opacity">
+                  <CopyButton text={title} />
                 </div>
               </li>
             ))}
@@ -159,18 +195,18 @@ const ResultSection: React.FC<ResultSectionProps> = ({ data }) => {
         {/* Style Candidates */}
         <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 backdrop-blur-md flex flex-col">
           <div className="flex items-center justify-between mb-4">
-             <div className="flex items-center gap-2 text-emerald-400">
-               <ListMusic className="w-5 h-5" />
-               <h3 className="font-semibold uppercase tracking-wider text-sm">スタイル候補</h3>
-             </div>
+            <div className="flex items-center gap-2 text-emerald-400">
+              <ListMusic className="w-5 h-5" />
+              <h3 className="font-semibold uppercase tracking-wider text-sm">スタイル候補</h3>
+            </div>
           </div>
           <ul className="space-y-3 flex-1">
             {data.styleCandidates.map((style, idx) => (
               <li key={idx} className="p-3 rounded-xl bg-slate-950/50 hover:bg-slate-800/50 transition-colors group border border-transparent hover:border-slate-700">
                 <div className="flex items-start justify-between gap-2">
                   <span className="text-xs text-emerald-100 font-mono leading-relaxed">{style}</span>
-                  <div className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity mt-0.5">
-                    <CopyButton text={style} label=" " />
+                  <div className="shrink-0 mt-0.5">
+                    <CopyButton text={style} />
                   </div>
                 </div>
               </li>
@@ -180,9 +216,9 @@ const ResultSection: React.FC<ResultSectionProps> = ({ data }) => {
       </div>
 
       {/* Best Selection */}
-      <SongCard 
-        selection={data.bestSelection} 
-        label="ベストセレクト (Recommended)" 
+      <SongCard
+        selection={data.bestSelection}
+        label="ベストセレクト (Recommended)"
       />
 
       {/* Alternative Selection */}
@@ -195,12 +231,12 @@ const ResultSection: React.FC<ResultSectionProps> = ({ data }) => {
         </div>
       </div>
 
-      <SongCard 
-        selection={data.alternativeSelection} 
-        label="変化球プラン (Alternative)" 
-        isAlternative={true} 
+      <SongCard
+        selection={data.alternativeSelection}
+        label="変化球プラン (Alternative)"
+        isAlternative={true}
       />
-      
+
     </div>
   );
 };

@@ -1,20 +1,301 @@
 <div align="center">
 <img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+
+# 🎵 Suno Architect v4.5
+
+**AIパワードの音楽プロンプトジェネレーター for Suno.ai**
+
+[![Gemini API](https://img.shields.io/badge/Powered%20by-Google%20Gemini-4285F4?logo=google&logoColor=white)](https://ai.google.dev/)
+[![Suno.ai](https://img.shields.io/badge/For-Suno.ai-FF6B6B)](https://suno.ai)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.0-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)](https://react.dev/)
+
 </div>
 
-# Run and deploy your AI Studio app
+---
 
-This contains everything you need to run your app locally.
+## 📖 概要
 
-View your app in AI Studio: https://ai.studio/apps/drive/1zy-PXVixuPlwCjfFS3ZKBUlDjyjUucHI
+Suno Architectは、YouTube動画やテキスト入力から**Suno.ai v4.5向けの最適なプロンプト**を自動生成するWebアプリケーションです。
 
-## Run Locally
+Google Geminiの強力なAI機能を活用し、楽曲のスタイル、歌詞、構成を分析して、高品質な音楽生成パラメータを出力します。
 
-**Prerequisites:**  Node.js
+### ✨ 主な特徴
 
+- 🎬 **YouTube動画解析** - URLを入力するだけで楽曲を分析
+- 🎥 **動画コンテンツ解析** - Gemini APIで映像・音声を直接解析（オプション）
+- 🔍 **マルチ検索エンジン** - Google Grounding / Custom Search / Tavily AI対応
+- 🎨 **スタイル候補生成** - 5つの異なるスタイルプロンプトを提案
+- 📝 **歌詞自動生成** - メタタグ付きの完全な歌詞構成
+- 🌐 **バイリンガル出力** - タイトル候補を日本語/英語で出力
+- 🎭 **オリジナルアレンジ** - 元素材の完全コピーを禁止し、独自の解釈を加える
+- 📊 **リアルタイム進捗表示** - 生成中のパーセンテージ表示
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+---
+
+## 🏗️ システムアーキテクチャ
+
+```mermaid
+graph TB
+    subgraph "Frontend (React + Vite)"
+        UI[InputSection.tsx<br/>ユーザー入力UI]
+        Result[ResultSection.tsx<br/>結果表示]
+        App[App.tsx<br/>状態管理]
+    end
+    
+    subgraph "Backend Service"
+        GS[geminiService.ts<br/>Gemini API連携]
+        Search{検索エンジン選択}
+    end
+    
+    subgraph "External APIs"
+        Gemini[Google Gemini API<br/>2.5 / 3 Flash]
+        GG[Google Grounding]
+        GCS[Google Custom Search]
+        Tavily[Tavily AI Search]
+    end
+    
+    UI --> App
+    App --> GS
+    GS --> Search
+    Search -->|Grounding| GG
+    Search -->|Custom| GCS
+    Search -->|Tavily| Tavily
+    GS --> Gemini
+    Gemini --> GS
+    GS --> App
+    App --> Result
+    
+    style UI fill:#4F46E5,color:#fff
+    style Result fill:#7C3AED,color:#fff
+    style Gemini fill:#4285F4,color:#fff
+```
+
+---
+
+## 🔄 処理フロー（シーケンス図）
+
+```mermaid
+sequenceDiagram
+    participant User as 👤 ユーザー
+    participant UI as 🖥️ InputSection
+    participant App as ⚛️ App.tsx
+    participant Service as 🔧 geminiService
+    participant Search as 🔍 検索API
+    participant Gemini as 🤖 Gemini API
+    participant Result as 📊 ResultSection
+
+    User->>UI: YouTube URL / テキスト入力
+    User->>UI: オプション設定<br/>(モデル, 検索, 動画解析)
+    UI->>App: onSubmit()
+    App->>App: isLoading = true
+    App->>Service: generateSunoPrompt()
+    
+    alt 検索エンジンON
+        Service->>Search: 動画情報検索
+        Search-->>Service: 検索結果
+    end
+    
+    alt 動画解析ON
+        Service->>Gemini: fileData (動画URL)
+    end
+    
+    Service->>Gemini: プロンプト生成リクエスト
+    Gemini-->>Service: JSON応答<br/>(analysis, titles, styles, lyrics)
+    Service-->>App: SunoResponse
+    App->>App: isLoading = false
+    App->>Result: 結果表示
+    Result->>User: コピーボタンで取得
+```
+
+---
+
+## 🚀 クイックスタート
+
+### 必要条件
+
+- Node.js 18+
+- Google Gemini API キー
+
+### インストール
+
+```bash
+# リポジトリをクローン
+git clone <repository-url>
+cd suno-ai
+
+# 依存関係をインストール
+npm install
+
+# 環境変数を設定
+# .env.localファイルを編集
+GEMINI_API_KEY=your_api_key_here
+
+# 開発サーバーを起動
+npm run dev
+```
+
+ブラウザで `http://localhost:3000` を開きます。
+
+### 停止方法
+
+```bash
+# ターミナルで Ctrl + C を押す
+```
+
+---
+
+## ⚙️ 設定オプション
+
+### AIモデル選択
+
+| モデル | 説明 |
+|--------|------|
+| **Gemini 2.5 Flash** | 最新・安定版。バランスの取れた性能 |
+| **Gemini 3 Flash Preview** | 最先端のプレビュー版。高度な解析能力 |
+
+### 検索エンジン
+
+| エンジン | 説明 | 設定 |
+|----------|------|------|
+| **OFF** | 検索なし（API節約） | デフォルト |
+| **Google Grounding** | Gemini内蔵の検索機能 | 追加設定不要 |
+| **Google Custom Search** | カスタム検索エンジン | API Key + CX必要 |
+| **Tavily AI** | AI特化型検索 | API Key必要 |
+
+### 環境変数
+
+```env
+# 必須
+GEMINI_API_KEY=your_gemini_api_key
+
+# オプション（検索エンジン用）
+GOOGLE_CUSTOM_SEARCH_API_KEY=your_google_cse_key
+GOOGLE_CUSTOM_SEARCH_CX=your_search_engine_id
+TAVILY_API_KEY=your_tavily_key
+```
+
+---
+
+## 📁 プロジェクト構造
+
+```
+suno-ai/
+├── App.tsx                 # メインアプリケーション（状態管理）
+├── index.tsx               # エントリーポイント
+├── types.ts                # 型定義
+├── utils.ts                # ユーティリティ関数
+├── components/
+│   ├── InputSection.tsx    # 入力UI（2カラムレイアウト）
+│   └── ResultSection.tsx   # 結果表示（コピーボタン付き）
+├── services/
+│   └── geminiService.ts    # Gemini API連携・プロンプト生成
+├── vite.config.ts          # Vite設定（環境変数）
+└── .env.local              # 環境変数（Git除外）
+```
+
+---
+
+## 🎨 UI機能
+
+### 入力セクション
+- **テーマ・URL入力** - YouTube URLまたはコンセプトを入力
+- **画像・動画アップロード** - メディアファイルを直接解析
+- **生成モード** - 自動 / 歌あり(Vocal) / 歌なし(Instrumental)
+- **AIモデル選択** - Gemini 2.5 Flash / 3 Flash Preview
+- **検索エンジン切替** - ON/OFFトグル + エンジン選択
+- **動画解析トグル** - YouTube映像・音声の直接解析
+
+### 結果セクション
+- **分析結果** - 楽曲の特徴解説
+- **タイトル候補** - 5つのバイリンガルタイトル
+- **スタイル候補** - 5つのスタイルプロンプト
+- **ベストセレクト** - 推奨プロンプト（タイトル・スタイル・歌詞）
+- **変化球プラン** - 代替アプローチ
+
+### コピー機能
+- すべての候補にコピーボタン付き
+- クリックで即座にクリップボードにコピー
+- 成功時に緑色のフィードバック表示
+
+---
+
+## 🔒 コンテンツポリシー
+
+Suno Architectは以下のルールに従ってコンテンツを生成します：
+
+> ⚠️ **完全コピー禁止**
+> - 元の楽曲のタイトル・歌詞をそのままコピーすることは禁止されています
+> - 動画の概要欄、コメント欄、背景情報を参考に独自のアレンジを加えます
+> - 元の世界観を尊重しつつ、新しい魅力を持つプロンプトを生成します
+
+---
+
+## 📊 状態遷移図
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle: アプリ起動
+    
+    Idle --> InputReady: URL/テキスト入力
+    InputReady --> Idle: 入力クリア
+    
+    InputReady --> Loading: 生成ボタンクリック
+    Loading --> Loading: 進捗更新 (0%→95%)
+    
+    Loading --> Success: 生成完了
+    Loading --> Error: エラー発生
+    
+    Success --> Idle: 新規生成
+    Error --> Idle: 再試行
+    
+    Success --> Copying: コピーボタン
+    Copying --> Success: コピー完了
+```
+
+---
+
+## 🛠️ 開発
+
+### ビルド
+
+```bash
+# 本番ビルド
+npm run build
+
+# プレビュー
+npm run preview
+```
+
+### 技術スタック
+
+- **Frontend**: React 18 + TypeScript
+- **Build Tool**: Vite 6
+- **Styling**: Tailwind CSS
+- **Icons**: Lucide React
+- **AI**: Google Gemini API (@google/genai)
+
+---
+
+## 📝 ライセンス
+
+MIT License
+
+---
+
+## 🙏 謝辞
+
+- [Google Gemini](https://ai.google.dev/) - AI/ML API
+- [Suno.ai](https://suno.ai) - 音楽生成プラットフォーム
+- [Vite](https://vitejs.dev/) - ビルドツール
+- [Tailwind CSS](https://tailwindcss.com/) - スタイリング
+
+---
+
+<div align="center">
+
+**Made with ❤️ for Music Creators**
+
+Powered by Google Gemini & Suno Architect Logic
+
+</div>
