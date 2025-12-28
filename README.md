@@ -241,16 +241,25 @@ stateDiagram-v2
     InputReady --> Idle: 入力クリア
     
     InputReady --> Loading: 生成ボタンクリック
-    Loading --> Loading: 進捗更新 (0%→95%)
-    
-    Loading --> Success: 生成完了
+    state Loading {
+        [*] --> Analyzing: AI分析開始
+        Analyzing --> ProgressUpdate: 進捗 0% → 95%
+        ProgressUpdate --> ProgressUpdate: 解析継続
+    }
+
+    Loading --> Success: 生成成功
     Loading --> Error: エラー発生
     
-    Success --> Idle: 新規生成
     Error --> Idle: 再試行
     
-    Success --> Copying: コピーボタン
-    Copying --> Success: コピー完了
+    state Success {
+        [*] --> ResultView: 結果表示
+        ResultView --> Copying: コピーボタン実行
+        Copying --> ResultView: クリップボード保存
+    }
+    
+    ResultView --> Idle: 新規生成
+    Success --> [*]: 終了
 ```
 
 ---
@@ -283,12 +292,14 @@ MIT License
 
 ---
 
-## 🙏 謝辞
+## � 参考URL・備考・メモ
 
 - [Google Gemini](https://ai.google.dev/) - AI/ML API
 - [Suno.ai](https://suno.ai) - 音楽生成プラットフォーム
 - [Vite](https://vitejs.dev/) - ビルドツール
 - [Tailwind CSS](https://tailwindcss.com/) - スタイリング
+- [Lucide React](https://lucide.dev/) - アイコンライブラリ
+- [Mermaid](https://mermaid.js.org/) - 図解生成エンジン
 
 ---
 
