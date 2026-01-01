@@ -22,8 +22,9 @@ Google Geminiの強力なAI機能を活用し、楽曲のスタイル、歌詞�
 
 ### ✨ 主な特徴
 
-- 🎯 **高精度YouTube解析** - oEmbed APIを使用し、URLから動画タイトル・投稿者を直接かつ正確に取得
-- 🎥 **動画コンテンツ解析** - Gemini APIで映像・音声を直接解析（オプション）
+- 🎯 **マルチプラットフォーム解析** - oEmbed APIを使用し、各種URLから詳細情報を取得
+  - 対応: **YouTube, Spotify, SoundCloud, TikTok, Vimeo**
+- 🎥 **動画コンテンツ解析** - Gemini APIで映像・音声を直接解析（オプション、YouTubeのみ）
 - 🔍 **マルチ検索エンジン** - Google Grounding / Custom Search / Tavily AI対応
 - 🎨 **スタイル候補生成** - 5つの異なるスタイルプロンプトを提案
 - 📝 **歌詞自動生成** - メタタグ付きの完全な歌詞構成

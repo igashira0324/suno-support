@@ -132,7 +132,7 @@ const InputSection: React.FC<InputSectionProps> = ({
               type="text"
               value={youtubeUrl}
               onChange={(e) => onUrlChange(e.target.value)}
-              placeholder="例: https://www.youtube.com/watch?v=..."
+              placeholder="YouTube, Spotify, SoundCloud, TikTok, Vimeo など"
               className="w-full bg-slate-950 border border-slate-800 rounded-lg p-4 text-base text-slate-200 placeholder-slate-600 focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
             />
           </div>

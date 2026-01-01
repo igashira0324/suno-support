@@ -67,35 +67,56 @@ const responseSchema: Schema = {
 };
 
 /**
- * Extracts YouTube Video ID from URL
+ * Supported oEmbed providers and their patterns
  */
-const extractYouTubeId = (url: string): string | null => {
-  const patterns = [
-    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/,
-    /youtube\.com\/v\/([a-zA-Z0-9_-]{11})/
-  ];
-  for (const pattern of patterns) {
-    const match = url.match(pattern);
-    if (match) return match[1];
+const OEMBED_PROVIDERS = [
+  {
+    name: 'YouTube',
+    patterns: [/youtube\.com\/watch\?v=/, /youtu\.be\//, /youtube\.com\/embed\//, /youtube\.com\/v\//],
+    endpoint: (url: string) => `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`
+  },
+  {
+    name: 'Spotify',
+    patterns: [/open\.spotify\.com\/(track|album|playlist|artist)\//],
+    endpoint: (url: string) => `https://open.spotify.com/oembed?url=${encodeURIComponent(url)}`
+  },
+  {
+    name: 'SoundCloud',
+    patterns: [/soundcloud\.com\//],
+    endpoint: (url: string) => `https://soundcloud.com/oembed?url=${encodeURIComponent(url)}&format=json`
+  },
+  {
+    name: 'TikTok',
+    patterns: [/tiktok\.com\/.*\/video\//, /tiktok\.com\/t\//],
+    endpoint: (url: string) => `https://www.tiktok.com/oembed?url=${encodeURIComponent(url)}`
+  },
+  {
+    name: 'Vimeo',
+    patterns: [/vimeo\.com\//],
+    endpoint: (url: string) => `https://vimeo.com/api/oembed.json?url=${encodeURIComponent(url)}`
   }
-  return null;
-};
+];
 
 /**
- * Fetch YouTube video title directly using oEmbed API (no API key required)
+ * Fetch metadata from various URLs using oEmbed
  */
-const fetchYouTubeTitle = async (videoId: string): Promise<{ title: string; author: string } | null> => {
+const fetchUrlMetadata = async (url: string): Promise<{ title: string; author: string; provider: string } | null> => {
+  if (!url) return null;
+
+  const provider = OEMBED_PROVIDERS.find(p => p.patterns.some(pattern => pattern.test(url)));
+  if (!provider) return null;
+
   try {
-    const oembedUrl = `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`;
-    const response = await fetch(oembedUrl);
+    const response = await fetch(provider.endpoint(url));
     if (!response.ok) return null;
     const data = await response.json();
     return {
       title: data.title || '',
-      author: data.author_name || ''
+      author: data.author_name || data.author || '',
+      provider: provider.name
     };
   } catch (error) {
-    console.error("YouTube oEmbed fetch error:", error);
+    console.error(`oEmbed fetch error for ${provider.name}:`, error);
     return null;
   }
 };
@@ -185,46 +206,33 @@ export const generateSunoPrompt = async (
 
     let prompt = `Current Generation Mode: ${mode}. \n`;
     let externalSearchResults = '';
-    const videoId = youtubeUrl ? extractYouTubeId(youtubeUrl) : null;
 
-    // If video analysis is enabled and we have a YouTube URL, instruct the model to analyze via its knowledge/search
-    if (videoId) {
-      const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
+    // Check if we have a URL to analyze
+    const urlMetadata = youtubeUrl ? await fetchUrlMetadata(youtubeUrl) : null;
+
+    if (urlMetadata) {
       const isVideoAnalysisEnabled = options.enableVideoAnalysis;
 
-      // FIRST: Try to fetch the actual video title using oEmbed API (most reliable method)
-      const videoInfo = await fetchYouTubeTitle(videoId);
+      prompt += `=== CRITICAL: EXTERNAL MEDIA IDENTIFICATION ===\n`;
+      prompt += `Source URL: ${youtubeUrl}\n`;
+      prompt += `Platform: ${urlMetadata.provider}\n`;
+      prompt += `✅ VERIFIED MEDIA INFORMATION:\n`;
+      prompt += `  - Title: ${urlMetadata.title}\n`;
+      prompt += `  - Author/Artist: ${urlMetadata.author}\n\n`;
 
-      prompt += `=== CRITICAL: YOUTUBE VIDEO IDENTIFICATION ===\n`;
-      prompt += `Target YouTube URL: ${youtubeUrl}\n`;
-      prompt += `Video ID: ${videoId}\n\n`;
+      prompt += `INSTRUCTION: Analyze this ${urlMetadata.provider} content. Use the verified title and author above.\n`;
+      prompt += `Do NOT guess the content. If you cannot analyze it, stay generic but professional.\n\n`;
 
-      // If we got the title directly from YouTube, use it!
-      if (videoInfo && videoInfo.title) {
-        prompt += `✅ VERIFIED VIDEO INFORMATION (from YouTube directly):\n`;
-        prompt += `  - Title: ${videoInfo.title}\n`;
-        prompt += `  - Channel: ${videoInfo.author}\n\n`;
-        prompt += `INSTRUCTION: Use this VERIFIED information above. This is the correct video title.\n`;
-        prompt += `Analyze this video based on its title, channel, and any additional search context.\n\n`;
-      } else {
-        // Fallback to search if oEmbed fails
-        prompt += `⚠️ STRICT RULES:\n`;
-        prompt += `1. You MUST identify the EXACT video at this URL. Do NOT guess or use your training data.\n`;
-        prompt += `2. If search results are provided below, use ONLY those results to identify the video.\n`;
-        prompt += `3. Do NOT confuse with popular songs (Vaundy, なとり, YOASOBI, etc.) - focus on the VIDEO ID.\n`;
-        prompt += `4. If you cannot find the exact video title, state "動画の詳細を特定できませんでした" instead of guessing.\n\n`;
-      }
-
-      if (isVideoAnalysisEnabled) {
-        prompt += `VIDEO ANALYSIS MODE: Research and analyze the video content, mood, and style.\n\n`;
+      if (isVideoAnalysisEnabled && urlMetadata.provider === 'YouTube') {
+        prompt += `VIDEO ANALYSIS MODE: Research and analyze the visual and auditory style of this video.\n\n`;
       }
 
       // Additional search for context (genre, style, etc.)
-      const searchQuery = `"${videoInfo?.title || videoId}" music genre style analysis`;
+      const searchQuery = `"${urlMetadata.title}" ${urlMetadata.author} music genre style analysis`;
 
       switch (options.searchEngine) {
         case 'google-grounding':
-          prompt += `OPTIONAL: Use Google Search for additional context about the music style and genre.\n`;
+          prompt += `OPTIONAL: Use Google Search to find more about the musical style of "${urlMetadata.title}".\n`;
           break;
         case 'google-custom':
           externalSearchResults = await searchWithGoogleCustom(searchQuery);
@@ -234,12 +242,15 @@ export const generateSunoPrompt = async (
           externalSearchResults = await searchWithTavily(searchQuery);
           prompt += `=== ADDITIONAL CONTEXT ===\n${externalSearchResults}\n`;
           break;
-        case 'none':
-          // No additional search
-          break;
       }
-    } else if (text) {
-      prompt += `Input: ${text}\n`;
+    } else if (youtubeUrl) {
+      // Fallback for non-oEmbed URLs
+      prompt += `Target URL: ${youtubeUrl}\n`;
+      prompt += `Note: Could not fetch automatic metadata. Please analyze based on the URL and search results if available.\n`;
+    }
+
+    if (text) {
+      prompt += `Theme/Concept: ${text}\n`;
     } else if (!file) {
       prompt += "Create a high-quality, modern music concept.";
     }
