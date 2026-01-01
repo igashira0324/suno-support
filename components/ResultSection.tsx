@@ -7,6 +7,33 @@ interface ResultSectionProps {
   data: SunoResponse;
 }
 
+// 歌詞・構成を見やすく改行してフォーマットする関数
+const formatContent = (content: string): string => {
+  if (!content) return '';
+
+  // まず\nリテラル文字列を実際の改行に変換
+  let formatted = content.replace(/\\n/g, '\n');
+
+  // 先頭・末尾の空白を除去
+  formatted = formatted.trim();
+
+  // 構造タグのパターン（[Intro], [Verse], [Chorus], [Bridge], [Outro], [Pre-Chorus], [Drop], [Hook], [Interlude]など）
+  const structureTags = /\[(Intro|Verse\s*\d*|Chorus|Bridge|Outro|Pre-Chorus|Post-Chorus|Drop|Hook|Interlude|Breakdown|Instrumental|Solo|Refrain|Fade|End|Tag|Coda|Stanza|Skit|Spoken|Rap|Singing|Harmonies|Ad-lib|Whisper|Screaming|Break|Build)\]/gi;
+
+  // 構造タグの前に改行を挿入（タグが行頭にない場合）
+  formatted = formatted.replace(structureTags, (match) => {
+    return '\n\n' + match;
+  });
+
+  // 連続する空白行を2つまでに制限
+  formatted = formatted.replace(/\n{3,}/g, '\n\n');
+
+  // 先頭の余分な改行を除去
+  formatted = formatted.replace(/^\n+/, '');
+
+  return formatted;
+};
+
 const CopyButton: React.FC<{ text: string; label?: string }> = ({ text, label }) => {
   const [copied, setCopied] = useState(false);
 
@@ -77,24 +104,30 @@ const SongCard: React.FC<{
     <div className={`bg-gradient-to-br from-slate-900 to-slate-950 border ${borderColor} rounded-2xl p-1 overflow-hidden shadow-2xl ${glowColor}`}>
       <div className="bg-slate-950/90 rounded-xl p-6 sm:p-8 backdrop-blur-xl relative">
 
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8 pb-6 border-b border-slate-800">
-          <div className="w-full">
-            <div className="flex items-center gap-2 mb-3">
-              <div className={`px-2 py-0.5 rounded text-xs font-bold tracking-wide border ${badgeBg} flex items-center gap-1`}>
-                {isAlternative ? <Zap className="w-3 h-3" /> : <Sparkles className="w-3 h-3" />}
-                {label}
-              </div>
-              <div className={`flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold tracking-wide border ${selection.instrumental ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30' : 'bg-orange-500/20 text-orange-300 border-orange-500/30'}`}>
-                {selection.instrumental ? <MicOff className="w-3 h-3" /> : <Mic2 className="w-3 h-3" />}
-                {selection.instrumental ? 'INSTRUMENTAL' : 'VOCAL'}
-              </div>
-            </div>
-            <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-tight mb-2">
+        {/* Header with badges */}
+        <div className="flex items-center gap-2 mb-4">
+          <div className={`px-2 py-0.5 rounded text-xs font-bold tracking-wide border ${badgeBg} flex items-center gap-1`}>
+            {isAlternative ? <Zap className="w-3 h-3" /> : <Sparkles className="w-3 h-3" />}
+            {label}
+          </div>
+          <div className={`flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold tracking-wide border ${selection.instrumental ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30' : 'bg-orange-500/20 text-orange-300 border-orange-500/30'}`}>
+            {selection.instrumental ? <MicOff className="w-3 h-3" /> : <Mic2 className="w-3 h-3" />}
+            {selection.instrumental ? 'INSTRUMENTAL' : 'VOCAL'}
+          </div>
+        </div>
+
+        {/* Title Display - Same layout as Style Prompts */}
+        <div className="mb-8 pb-6 border-b border-slate-800">
+          <div className="flex items-center justify-between mb-2">
+            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Title</label>
+            <CopyButton text={selection.title} label="タイトルをコピー" />
+          </div>
+          <div className="p-4 bg-slate-900 rounded-lg border border-slate-800">
+            <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">
               {selection.title}
             </h2>
             {selection.comment && (
-              <p className="text-sm text-slate-400 italic">
+              <p className="text-sm text-slate-400 italic mt-2">
                 💡 {selection.comment}
               </p>
             )}
@@ -118,12 +151,12 @@ const SongCard: React.FC<{
             <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
               {selection.instrumental ? 'Structure Metatags' : 'Lyrics & Metatags'}
             </label>
-            <CopyButton text={selection.content} label="歌詞・構成をコピー" />
+            <CopyButton text={formatContent(selection.content)} label="歌詞・構成をコピー" />
           </div>
           <div className="relative">
             <div className={`absolute top-0 left-0 w-full h-1 bg-gradient-to-r opacity-50 ${isAlternative ? 'from-pink-500 via-rose-500 to-purple-500' : 'from-indigo-500 via-purple-500 to-pink-500'}`} />
             <pre className="p-6 bg-slate-900 rounded-b-lg rounded-tr-lg border-x border-b border-slate-800 font-mono text-sm text-slate-300 whitespace-pre-wrap leading-relaxed max-h-[500px] overflow-y-auto custom-scrollbar">
-              {selection.content}
+              {formatContent(selection.content)}
             </pre>
           </div>
         </div>

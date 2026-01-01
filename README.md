@@ -22,7 +22,7 @@ Google Geminiの強力なAI機能を活用し、楽曲のスタイル、歌詞�
 
 ### ✨ 主な特徴
 
-- 🎬 **YouTube動画解析** - URLを入力するだけで楽曲を分析
+- 🎯 **高精度YouTube解析** - oEmbed APIを使用し、URLから動画タイトル・投稿者を直接かつ正確に取得
 - 🎥 **動画コンテンツ解析** - Gemini APIで映像・音声を直接解析（オプション）
 - 🔍 **マルチ検索エンジン** - Google Grounding / Custom Search / Tavily AI対応
 - 🎨 **スタイル候補生成** - 5つの異なるスタイルプロンプトを提案
@@ -38,13 +38,14 @@ Google Geminiの強力なAI機能を活用し、楽曲のスタイル、歌詞�
 ```mermaid
 graph TB
     subgraph "Frontend (React + Vite)"
-        UI[InputSection.tsx<br/>ユーザー入力UI]
+        UI[InputSection.tsx<br/>テーマ & URL入力]
         Result[ResultSection.tsx<br/>結果表示]
         App[App.tsx<br/>状態管理]
     end
     
     subgraph "Backend Service"
         GS[geminiService.ts<br/>Gemini API連携]
+        oEmbed[oEmbed API<br/>YouTube直接照会]
         Search{検索エンジン選択}
     end
     
@@ -57,6 +58,7 @@ graph TB
     
     UI --> App
     App --> GS
+    GS --> oEmbed
     GS --> Search
     Search -->|Grounding| GG
     Search -->|Custom| GCS
@@ -81,19 +83,24 @@ sequenceDiagram
     participant UI as 🖥️ InputSection
     participant App as ⚛️ App.tsx
     participant Service as 🔧 geminiService
+    participant YT as 📺 YouTube oEmbed
     participant Search as 🔍 検索API
     participant Gemini as 🤖 Gemini API
     participant Result as 📊 ResultSection
 
-    User->>UI: YouTube URL / テキスト入力
-    User->>UI: オプション設定<br/>(モデル, 検索, 動画解析)
+    User->>UI: テーマ・コンセプト入力
+    User->>UI: YouTube URL入力
     UI->>App: onSubmit()
-    App->>App: isLoading = true
     App->>Service: generateSunoPrompt()
     
+    alt YouTube URLあり
+        Service->>YT: 動画タイトル・投稿者取得
+        YT-->>Service: 正確な動画情報
+    end
+
     alt 検索エンジンON
-        Service->>Search: 動画情報検索
-        Search-->>Service: 検索結果
+        Service->>Search: 追加コンテキスト検索
+        Search-->>Service: スタイル・ジャンル情報
     end
     
     alt 動画解析ON
@@ -101,11 +108,9 @@ sequenceDiagram
     end
     
     Service->>Gemini: プロンプト生成リクエスト
-    Gemini-->>Service: JSON応答<br/>(analysis, titles, styles, lyrics)
+    Gemini-->>Service: JSON応答
     Service-->>App: SunoResponse
-    App->>App: isLoading = false
     App->>Result: 結果表示
-    Result->>User: コピーボタンで取得
 ```
 
 ---
@@ -120,28 +125,19 @@ sequenceDiagram
 ### インストール
 
 ```bash
-# リポジトリをクローン
-git clone <repository-url>
-cd suno-ai
-
 # 依存関係をインストール
 npm install
 
-# 環境変数を設定
-# .env.localファイルを編集
+# 環境変数を設定 (.env.local)
 GEMINI_API_KEY=your_api_key_here
 
-# 開発サーバーを起動
+# 起動用バッチファイル（Windows）
+start.bat
+# または
 npm run dev
 ```
 
 ブラウザで `http://localhost:3000` を開きます。
-
-### 停止方法
-
-```bash
-# ターミナルで Ctrl + C を押す
-```
 
 ---
 
@@ -186,10 +182,10 @@ suno-ai/
 ├── types.ts                # 型定義
 ├── utils.ts                # ユーティリティ関数
 ├── components/
-│   ├── InputSection.tsx    # 入力UI（2カラムレイアウト）
-│   └── ResultSection.tsx   # 結果表示（コピーボタン付き）
+│   ├── InputSection.tsx    # 入力UI（テーマとURLを分離）
+│   └── ResultSection.tsx   # 結果表示（コピーボタン・分析表示）
 ├── services/
-│   └── geminiService.ts    # Gemini API連携・プロンプト生成
+│   └── geminiService.ts    # oEmbed連携・Gemini API連携
 ├── vite.config.ts          # Vite設定（環境変数）
 └── .env.local              # 環境変数（Git除外）
 ```
@@ -199,7 +195,8 @@ suno-ai/
 ## 🎨 UI機能
 
 ### 入力セクション
-- **テーマ・URL入力** - YouTube URLまたはコンセプトを入力
+- **テーマ・コンセプト** - 生成したい曲の雰囲気や歌詞のテーマを入力
+- **URL (YouTubeなど)** - 解析のベースにしたいYouTube動画のURLを入力
 - **画像・動画アップロード** - メディアファイルを直接解析
 - **生成モード** - 自動 / 歌あり(Vocal) / 歌なし(Instrumental)
 - **AIモデル選択** - Gemini 2.5 Flash / 3 Flash Preview

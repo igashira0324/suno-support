@@ -8,6 +8,7 @@ import { AudioWaveform as Waveform, Sparkles, AlertCircle } from 'lucide-react';
 const App: React.FC = () => {
   const [state, setState] = useState<AppState>({
     inputText: '',
+    youtubeUrl: '',
     mediaFile: null,
     mediaType: MediaType.NONE,
     generationMode: GenerationMode.VOCAL,
@@ -21,6 +22,10 @@ const App: React.FC = () => {
 
   const handleTextChange = (text: string) => {
     setState(prev => ({ ...prev, inputText: text }));
+  };
+
+  const handleUrlChange = (url: string) => {
+    setState(prev => ({ ...prev, youtubeUrl: url }));
   };
 
   const handleSearchEngineChange = (engine: any) => {
@@ -50,13 +55,14 @@ const App: React.FC = () => {
   };
 
   const handleSubmit = async () => {
-    if (!state.inputText && !state.mediaFile) return;
+    if (!state.inputText && !state.youtubeUrl && !state.mediaFile) return;
 
     setState(prev => ({ ...prev, isLoading: true, error: null, result: null }));
 
     try {
       const result = await generateSunoPrompt(
         state.inputText,
+        state.youtubeUrl,
         state.mediaFile,
         state.generationMode,
         { searchEngine: state.searchEngine, modelName: state.modelName, enableVideoAnalysis: state.enableVideoAnalysis }
@@ -102,7 +108,9 @@ const App: React.FC = () => {
         <div className="space-y-16">
           <InputSection
             inputText={state.inputText}
+            youtubeUrl={state.youtubeUrl}
             onTextChange={handleTextChange}
+            onUrlChange={handleUrlChange}
             onFileSelect={handleFileSelect}
             onSubmit={handleSubmit}
             isLoading={state.isLoading}

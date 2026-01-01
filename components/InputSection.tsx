@@ -1,11 +1,13 @@
 
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useMemo } from 'react';
 import { MediaType, GenerationMode } from '../types';
-import { Music, Image as ImageIcon, Video, X, Wand2, Mic2, MicOff, Sparkles, Search, SearchX } from 'lucide-react';
+import { Music, Image as ImageIcon, Video, X, Wand2, Mic2, MicOff, Sparkles, Search, SearchX, AlertTriangle } from 'lucide-react';
 
 interface InputSectionProps {
   inputText: string;
+  youtubeUrl: string;
   onTextChange: (text: string) => void;
+  onUrlChange: (url: string) => void;
   onFileSelect: (file: File | null, type: MediaType) => void;
   onSubmit: () => void;
   isLoading: boolean;
@@ -23,7 +25,9 @@ interface InputSectionProps {
 
 const InputSection: React.FC<InputSectionProps> = ({
   inputText,
+  youtubeUrl,
   onTextChange,
+  onUrlChange,
   onFileSelect,
   onSubmit,
   isLoading,
@@ -104,18 +108,32 @@ const InputSection: React.FC<InputSectionProps> = ({
 
       {/* Main Grid: 2 columns */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
-        {/* Left Column: Text + File Upload */}
+        {/* Left Column: Text + URL + File Upload */}
         <div className="space-y-3">
-          {/* Text Input */}
+          {/* Theme/Concept Input */}
           <div>
             <label className="block text-base font-medium text-slate-300 mb-2">
-              テーマ・YouTube URL・コンセプト
+              テーマ・コンセプト
             </label>
             <textarea
               value={inputText}
               onChange={(e) => onTextChange(e.target.value)}
+              placeholder="例: ダーク系のEDM、切ない恋をテーマにした曲"
+              className="w-full h-24 bg-slate-950 border border-slate-800 rounded-lg p-4 text-base text-slate-200 placeholder-slate-600 focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all resize-none"
+            />
+          </div>
+
+          {/* YouTube URL Input */}
+          <div>
+            <label className="block text-base font-medium text-slate-300 mb-2">
+              URL (YouTubeなど)
+            </label>
+            <input
+              type="text"
+              value={youtubeUrl}
+              onChange={(e) => onUrlChange(e.target.value)}
               placeholder="例: https://www.youtube.com/watch?v=..."
-              className="w-full h-36 bg-slate-950 border border-slate-800 rounded-lg p-4 text-base text-slate-200 placeholder-slate-600 focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all resize-none"
+              className="w-full bg-slate-950 border border-slate-800 rounded-lg p-4 text-base text-slate-200 placeholder-slate-600 focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
             />
           </div>
 
@@ -263,8 +281,8 @@ const InputSection: React.FC<InputSectionProps> = ({
       {/* Submit Button with Progress */}
       <button
         onClick={onSubmit}
-        disabled={isLoading || (!inputText && !mediaFile)}
-        className={`w-full py-4 rounded-xl font-bold text-base flex flex-col items-center justify-center gap-1 transition-all duration-300 shadow-lg ${isLoading || (!inputText && !mediaFile)
+        disabled={isLoading || (!inputText && !youtubeUrl && !mediaFile)}
+        className={`w-full py-4 rounded-xl font-bold text-base flex flex-col items-center justify-center gap-1 transition-all duration-300 shadow-lg ${isLoading || (!inputText && !youtubeUrl && !mediaFile)
           ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
           : 'bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white hover:shadow-indigo-500/25'
           }`}

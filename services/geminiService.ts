@@ -82,6 +82,25 @@ const extractYouTubeId = (url: string): string | null => {
 };
 
 /**
+ * Fetch YouTube video title directly using oEmbed API (no API key required)
+ */
+const fetchYouTubeTitle = async (videoId: string): Promise<{ title: string; author: string } | null> => {
+  try {
+    const oembedUrl = `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`;
+    const response = await fetch(oembedUrl);
+    if (!response.ok) return null;
+    const data = await response.json();
+    return {
+      title: data.title || '',
+      author: data.author_name || ''
+    };
+  } catch (error) {
+    console.error("YouTube oEmbed fetch error:", error);
+    return null;
+  }
+};
+
+/**
  * Search using Google Custom Search API
  */
 const searchWithGoogleCustom = async (query: string): Promise<string> => {
@@ -144,6 +163,7 @@ const searchWithTavily = async (query: string): Promise<string> => {
 
 export const generateSunoPrompt = async (
   text: string,
+  youtubeUrl: string,
   file: File | null,
   mode: GenerationMode = GenerationMode.AUTO,
   options: { searchEngine: SearchEngine; modelName: string; enableVideoAnalysis?: boolean } = { searchEngine: 'google-grounding', modelName: 'gemini-3-flash-preview', enableVideoAnalysis: false }
@@ -165,46 +185,57 @@ export const generateSunoPrompt = async (
 
     let prompt = `Current Generation Mode: ${mode}. \n`;
     let externalSearchResults = '';
-    const videoId = text ? extractYouTubeId(text) : null;
+    const videoId = youtubeUrl ? extractYouTubeId(youtubeUrl) : null;
 
-    // If video analysis is enabled and we have a YouTube URL, add video as fileData
-    if (videoId && options.enableVideoAnalysis) {
+    // If video analysis is enabled and we have a YouTube URL, instruct the model to analyze via its knowledge/search
+    if (videoId) {
       const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
-      parts.push({
-        fileData: {
-          fileUri: youtubeUrl,
-          mimeType: "video/*"
-        }
-      });
-      prompt += `VIDEO ANALYSIS MODE: Analyze the actual video content at ${youtubeUrl}.\n`;
-      prompt += `1. Watch and analyze the video's visual content, music, and audio.\n`;
-      prompt += `2. Identify the genre, mood, BPM, instruments, and vocal style from the actual content.\n`;
-      prompt += `3. Transcribe any lyrics or vocals you hear.\n`;
-      prompt += `4. Base your Suno prompt on this direct analysis, not external search.\n`;
-    } else if (videoId) {
-      prompt += `TARGET IDENTIFICATION: YouTube Video ID is "${videoId}".\n`;
-      const searchQuery = `YouTube video ID ${videoId} title artist`;
+      const isVideoAnalysisEnabled = options.enableVideoAnalysis;
+
+      // FIRST: Try to fetch the actual video title using oEmbed API (most reliable method)
+      const videoInfo = await fetchYouTubeTitle(videoId);
+
+      prompt += `=== CRITICAL: YOUTUBE VIDEO IDENTIFICATION ===\n`;
+      prompt += `Target YouTube URL: ${youtubeUrl}\n`;
+      prompt += `Video ID: ${videoId}\n\n`;
+
+      // If we got the title directly from YouTube, use it!
+      if (videoInfo && videoInfo.title) {
+        prompt += `✅ VERIFIED VIDEO INFORMATION (from YouTube directly):\n`;
+        prompt += `  - Title: ${videoInfo.title}\n`;
+        prompt += `  - Channel: ${videoInfo.author}\n\n`;
+        prompt += `INSTRUCTION: Use this VERIFIED information above. This is the correct video title.\n`;
+        prompt += `Analyze this video based on its title, channel, and any additional search context.\n\n`;
+      } else {
+        // Fallback to search if oEmbed fails
+        prompt += `⚠️ STRICT RULES:\n`;
+        prompt += `1. You MUST identify the EXACT video at this URL. Do NOT guess or use your training data.\n`;
+        prompt += `2. If search results are provided below, use ONLY those results to identify the video.\n`;
+        prompt += `3. Do NOT confuse with popular songs (Vaundy, なとり, YOASOBI, etc.) - focus on the VIDEO ID.\n`;
+        prompt += `4. If you cannot find the exact video title, state "動画の詳細を特定できませんでした" instead of guessing.\n\n`;
+      }
+
+      if (isVideoAnalysisEnabled) {
+        prompt += `VIDEO ANALYSIS MODE: Research and analyze the video content, mood, and style.\n\n`;
+      }
+
+      // Additional search for context (genre, style, etc.)
+      const searchQuery = `"${videoInfo?.title || videoId}" music genre style analysis`;
 
       switch (options.searchEngine) {
         case 'google-grounding':
-          // Will use built-in grounding, add instructions
-          prompt += `1. Search for the EXACT title and artist of YouTube video ID: ${videoId}.\n`;
-          prompt += `2. DO NOT confuse it with popular songs or playlist context. Focus ONLY on this video ID.\n`;
-          prompt += `3. Verify the actual content based on your search.\n`;
-          prompt += `4. Based on its actual genre, create the prompts.\n`;
+          prompt += `OPTIONAL: Use Google Search for additional context about the music style and genre.\n`;
           break;
         case 'google-custom':
           externalSearchResults = await searchWithGoogleCustom(searchQuery);
-          prompt += `External Search Results (Google Custom Search):\n${externalSearchResults}\n`;
-          prompt += `Use the above search results to identify the video and create prompts.\n`;
+          prompt += `=== ADDITIONAL CONTEXT ===\n${externalSearchResults}\n`;
           break;
         case 'tavily':
           externalSearchResults = await searchWithTavily(searchQuery);
-          prompt += `External Search Results (Tavily AI Search):\n${externalSearchResults}\n`;
-          prompt += `Use the above search results to identify the video and create prompts.\n`;
+          prompt += `=== ADDITIONAL CONTEXT ===\n${externalSearchResults}\n`;
           break;
         case 'none':
-          prompt += `Note: Search is disabled. Use only provided text/media context.\n`;
+          // No additional search
           break;
       }
     } else if (text) {

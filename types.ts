@@ -39,6 +39,7 @@ export interface SunoResponse {
 
 export interface AppState {
   inputText: string;
+  youtubeUrl: string;
   mediaFile: File | null;
   mediaType: MediaType;
   generationMode: GenerationMode;
