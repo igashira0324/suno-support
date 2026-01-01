@@ -94,6 +94,16 @@ const OEMBED_PROVIDERS = [
     name: 'Vimeo',
     patterns: [/vimeo\.com\//],
     endpoint: (url: string) => `https://vimeo.com/api/oembed.json?url=${encodeURIComponent(url)}`
+  },
+  {
+    name: 'Twitter/X',
+    patterns: [/twitter\.com\//, /x\.com\//],
+    endpoint: (url: string) => `https://publish.twitter.com/oembed?url=${encodeURIComponent(url)}`
+  },
+  {
+    name: 'Instagram',
+    patterns: [/instagram\.com\//],
+    endpoint: (url: string) => `https://api.instagram.com/oembed?url=${encodeURIComponent(url)}`
   }
 ];
 

@@ -126,13 +126,13 @@ const InputSection: React.FC<InputSectionProps> = ({
           {/* YouTube URL Input */}
           <div>
             <label className="block text-base font-medium text-slate-300 mb-2">
-              URL (YouTubeなど)
+              URL (oEmbedサポート)
             </label>
             <input
               type="text"
               value={youtubeUrl}
               onChange={(e) => onUrlChange(e.target.value)}
-              placeholder="YouTube, Spotify, SoundCloud, TikTok, Vimeo など"
+              placeholder="YouTube, Spotify, X, SoundCloud, TikTok, Instagram など"
               className="w-full bg-slate-950 border border-slate-800 rounded-lg p-4 text-base text-slate-200 placeholder-slate-600 focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
             />
           </div>
