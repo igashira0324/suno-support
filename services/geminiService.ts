@@ -104,6 +104,11 @@ const OEMBED_PROVIDERS = [
     name: 'Instagram',
     patterns: [/instagram\.com\//],
     endpoint: (url: string) => `https://api.instagram.com/oembed?url=${encodeURIComponent(url)}`
+  },
+  {
+    name: 'Suno.ai',
+    patterns: [/suno\.com\/(song|s)\//, /suno\.ai\/(song|s)\//],
+    endpoint: (url: string) => `https://studio-api.prod.suno.com/api/oembed?url=${encodeURIComponent(url)}`
   }
 ];
 

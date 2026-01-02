@@ -54,7 +54,8 @@ const InputSection: React.FC<InputSectionProps> = ({
     /tiktok\.com/,
     /vimeo\.com/,
     /twitter\.com/, /x\.com/,
-    /instagram\.com/
+    /instagram\.com/,
+    /suno\.com/, /suno\.ai/
   ];
 
   // Detect if URL is non-oEmbed (like Suno.ai, Apple Music)
@@ -150,7 +151,7 @@ const InputSection: React.FC<InputSectionProps> = ({
               type="text"
               value={youtubeUrl}
               onChange={(e) => onUrlChange(e.target.value)}
-              placeholder="YouTube, Spotify, X, SoundCloud, TikTok, Instagram など"
+              placeholder="YouTube, Spotify, Suno, X, SoundCloud, TikTok など"
               className="w-full bg-slate-950 border border-slate-800 rounded-lg p-4 text-base text-slate-200 placeholder-slate-600 focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
             />
             {/* Non-oEmbed URL Warning */}

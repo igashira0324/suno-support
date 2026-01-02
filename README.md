@@ -23,7 +23,7 @@ Google Geminiの強力なAI機能を活用し、楽曲のスタイル、歌詞�
 ### ✨ 主な特徴
 
 - 🎯 **マルチプラットフォーム解析** - oEmbed APIを使用し、各種URLから詳細情報を取得
-  - 対応: **YouTube, Spotify, SoundCloud, TikTok, Vimeo, X(Twitter), Instagram**
+  - 対応: **YouTube, Spotify, Suno.ai, SoundCloud, TikTok, Vimeo, X(Twitter), Instagram**
 - 🎥 **動画コンテンツ解析** - Gemini APIで映像・音声を直接解析（オプション、YouTubeのみ）
 - 🔍 **マルチ検索エンジン** - Google Grounding / Custom Search / Tavily AI対応
 - 🎨 **スタイル候補生成** - 5つの異なるスタイルプロンプトを提案
