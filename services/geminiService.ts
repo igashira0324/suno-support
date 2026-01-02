@@ -254,9 +254,25 @@ export const generateSunoPrompt = async (
           break;
       }
     } else if (youtubeUrl) {
-      // Fallback for non-oEmbed URLs
+      // Fallback for non-oEmbed URLs (like Suno.ai)
+      const isSuno = youtubeUrl.includes('suno.com') || youtubeUrl.includes('suno.ai');
+
+      prompt += `=== MEDIA ANALYSIS (NON-OEMBED) ===\n`;
       prompt += `Target URL: ${youtubeUrl}\n`;
-      prompt += `Note: Could not fetch automatic metadata. Please analyze based on the URL and search results if available.\n`;
+
+      if (isSuno) {
+        prompt += `Platform: Suno.ai\n`;
+        prompt += `INSTRUCTION: This is a Suno.ai song link. Please use your search capability (Google Search) to find the title, tags, and lyrics of this track if available.\n`;
+      } else {
+        prompt += `Note: Could not fetch automatic metadata via oEmbed.\n`;
+      }
+
+      prompt += `INSTRUCTION: Analyze the contents of this URL to provide a high-quality music prompt.\n\n`;
+
+      // Trigger search if enabled
+      if (options.searchEngine === 'google-grounding') {
+        prompt += `SEARCH INSTRUCTION: Search for this specific URL: ${youtubeUrl} to extract track details.\n`;
+      }
     }
 
     if (text) {

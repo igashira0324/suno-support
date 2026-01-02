@@ -46,6 +46,24 @@ const InputSection: React.FC<InputSectionProps> = ({
   const [searchEnabled, setSearchEnabled] = useState(false);
   const [progress, setProgress] = useState(0);
 
+  // oEmbed supported patterns
+  const OEMBED_PATTERNS = [
+    /youtube\.com/, /youtu\.be/,
+    /open\.spotify\.com/,
+    /soundcloud\.com/,
+    /tiktok\.com/,
+    /vimeo\.com/,
+    /twitter\.com/, /x\.com/,
+    /instagram\.com/
+  ];
+
+  // Detect if URL is non-oEmbed (like Suno.ai, Apple Music)
+  const isNonOembedUrl = useMemo(() => {
+    if (!youtubeUrl) return false;
+    const isOembedSupported = OEMBED_PATTERNS.some(p => p.test(youtubeUrl));
+    return !isOembedSupported && youtubeUrl.length > 5;
+  }, [youtubeUrl]);
+
   // Reset progress when loading starts/stops
   React.useEffect(() => {
     if (isLoading) {
@@ -135,6 +153,16 @@ const InputSection: React.FC<InputSectionProps> = ({
               placeholder="YouTube, Spotify, X, SoundCloud, TikTok, Instagram など"
               className="w-full bg-slate-950 border border-slate-800 rounded-lg p-4 text-base text-slate-200 placeholder-slate-600 focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
             />
+            {/* Non-oEmbed URL Warning */}
+            {isNonOembedUrl && !searchEnabled && (
+              <div className="mt-2 flex items-start gap-2 p-3 bg-amber-950/30 border border-amber-500/40 rounded-lg text-amber-200 text-sm">
+                <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-medium text-amber-300">検索エンジンをONにしてください</p>
+                  <p className="text-xs text-amber-200/70 mt-1">このURL（Suno.ai, Apple Music等）はoEmbed非対応のため、正確に解析するには検索エンジンが必要です。</p>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* File Input - Compact */}
