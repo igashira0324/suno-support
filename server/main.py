@@ -22,6 +22,7 @@ import torch
 import torchaudio
 import yue_service
 import audio_analysis
+import clap_service
 
 app = FastAPI()
 
@@ -294,6 +295,56 @@ async def analyze_audio(request: AnalyzeRequest):
     except Exception as e:
         logger.error(f"Audio analysis error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+# CLAP Endpoints
+class CLAPSearchRequest(BaseModel):
+    file_path: str
+    query: str
+    window_sec: float = 5.0
+    top_k: int = 5
+
+@app.post("/clap/search")
+async def clap_search(request: CLAPSearchRequest):
+    """
+    Search for audio segments matching a natural language query using CLAP.
+    """
+    try:
+        # Convert web path to filesystem path
+        web_path = request.file_path
+        if web_path.startswith("/uploads/"):
+            fs_path = UPLOAD_DIR / web_path.replace("/uploads/", "")
+        elif web_path.startswith("/outputs/"):
+            fs_path = OUTPUT_DIR / web_path.replace("/outputs/", "")
+        else:
+            fs_path = Path(web_path)
+        
+        if not fs_path.exists():
+            raise HTTPException(status_code=404, detail=f"File not found: {fs_path}")
+        
+        service = clap_service.get_clap_service()
+        result = service.search_by_text(
+            str(fs_path), 
+            request.query, 
+            window_sec=request.window_sec,
+            top_k=request.top_k
+        )
+        
+        if not result.get("success"):
+            raise HTTPException(status_code=500, detail=result.get("error", "CLAP search failed"))
+        
+        return result
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"CLAP search error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/clap/presets")
+async def get_clap_presets():
+    """Get preset query options for CLAP search UI"""
+    service = clap_service.get_clap_service()
+    return {"presets": service.get_preset_queries()}
 
 @app.post("/suno/analyze")
 async def analyze_suno(url: str = Body(..., embed=True)):

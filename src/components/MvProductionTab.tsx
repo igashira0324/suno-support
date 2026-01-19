@@ -45,6 +45,28 @@ interface AudioAnalysis {
     error?: string;
 }
 
+// CLAP Search Types
+interface CLAPResult {
+    start: number;
+    end: number;
+    score: number;
+    rank: number;
+    label: string;
+}
+
+interface CLAPPreset {
+    id: string;
+    label: string;
+    query: string;
+}
+
+interface CLAPSearchResponse {
+    success: boolean;
+    query?: string;
+    results?: CLAPResult[];
+    error?: string;
+}
+
 const MvProductionTab: React.FC = () => {
     const [state, setState] = useState<TaskState>({
         id: null,
@@ -74,6 +96,12 @@ const MvProductionTab: React.FC = () => {
     const [audioAnalysis, setAudioAnalysis] = useState<AudioAnalysis | null>(null);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [showIntensityCurve, setShowIntensityCurve] = useState(true);
+
+    // CLAP Search States
+    const [clapQuery, setClapQuery] = useState('');
+    const [clapResults, setClapResults] = useState<CLAPResult[]>([]);
+    const [clapPresets, setClapPresets] = useState<CLAPPreset[]>([]);
+    const [isSearching, setIsSearching] = useState(false);
 
     const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -397,6 +425,72 @@ const MvProductionTab: React.FC = () => {
             resize: true
         });
         setSelectedRegion({ start: segment.start, end: segment.end });
+    };
+
+    // CLAP Search Functions
+    const loadClapPresets = async () => {
+        try {
+            const response = await fetch('http://localhost:8000/clap/presets');
+            if (response.ok) {
+                const data = await response.json();
+                setClapPresets(data.presets || []);
+            }
+        } catch (e) {
+            console.error('Failed to load CLAP presets:', e);
+        }
+    };
+
+    const handleClapSearch = async (query?: string) => {
+        if (!state.result) return;
+        const searchQuery = query || clapQuery;
+        if (!searchQuery.trim()) return;
+
+        const trackUrl = activeTrack === 'original'
+            ? state.result.original_path
+            : activeTrack === 'vocals'
+                ? state.result.vocals_url
+                : state.result.instrumental_url;
+
+        if (!trackUrl) return;
+
+        setIsSearching(true);
+        setClapResults([]);
+        try {
+            const response = await fetch('http://localhost:8000/clap/search', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    file_path: trackUrl,
+                    query: searchQuery,
+                    window_sec: 5.0,
+                    top_k: 5
+                })
+            });
+
+            if (!response.ok) throw new Error('CLAP search failed');
+
+            const data: CLAPSearchResponse = await response.json();
+            if (data.success && data.results) {
+                setClapResults(data.results);
+            }
+        } catch (e) {
+            console.error('CLAP search error:', e);
+        } finally {
+            setIsSearching(false);
+        }
+    };
+
+    const handleClapResultClick = (result: CLAPResult) => {
+        if (!regionsPluginRef.current) return;
+        regionsPluginRef.current.clearRegions();
+        regionsPluginRef.current.addRegion({
+            start: result.start,
+            end: result.end,
+            color: 'rgba(99, 102, 241, 0.3)', // Indigo highlight for CLAP results
+            drag: true,
+            resize: true
+        });
+        setSelectedRegion({ start: result.start, end: result.end });
     };
 
     const handleDownloadSegment = async (e: React.MouseEvent) => {
@@ -803,6 +897,92 @@ const MvProductionTab: React.FC = () => {
                             {audioAnalysis && !audioAnalysis.success && (
                                 <div className="text-red-400 text-sm">
                                     Analysis failed: {audioAnalysis.error}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Smart Range Selector (CLAP) */}
+                        <div className="bg-gradient-to-br from-indigo-950/50 to-purple-950/50 rounded-3xl p-6 border border-indigo-500/20 space-y-4">
+                            <div className="flex items-center justify-between">
+                                <h3 className="text-indigo-300 text-xs font-mono uppercase tracking-widest flex items-center gap-2">
+                                    🔍 Smart Range Selector (AI)
+                                </h3>
+                                <button
+                                    onClick={loadClapPresets}
+                                    className="text-xs text-slate-500 hover:text-white transition-colors"
+                                >
+                                    Load Presets
+                                </button>
+                            </div>
+
+                            {/* Search Input */}
+                            <div className="flex gap-2">
+                                <input
+                                    type="text"
+                                    value={clapQuery}
+                                    onChange={(e) => setClapQuery(e.target.value)}
+                                    onKeyDown={(e) => e.key === 'Enter' && handleClapSearch()}
+                                    placeholder="例: 盛り上がる歌声、静かなパート、サビの部分..."
+                                    className="flex-1 bg-slate-900/50 text-white px-4 py-3 rounded-xl border border-slate-700 focus:border-indigo-500 focus:outline-none placeholder-slate-600 text-sm"
+                                />
+                                <button
+                                    onClick={() => handleClapSearch()}
+                                    disabled={isSearching || !clapQuery.trim()}
+                                    className={`px-6 py-3 rounded-xl font-bold text-sm transition-all flex items-center gap-2 ${isSearching || !clapQuery.trim() ? 'bg-slate-800 text-slate-500' : 'bg-indigo-600 hover:bg-indigo-500 text-white'}`}
+                                >
+                                    {isSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Music className="w-4 h-4" />}
+                                    {isSearching ? '検索中...' : '検索'}
+                                </button>
+                            </div>
+
+                            {/* Preset Buttons */}
+                            {clapPresets.length > 0 && (
+                                <div className="flex flex-wrap gap-2">
+                                    {clapPresets.map((preset) => (
+                                        <button
+                                            key={preset.id}
+                                            onClick={() => {
+                                                setClapQuery(preset.query);
+                                                handleClapSearch(preset.query);
+                                            }}
+                                            className="px-3 py-1.5 text-xs bg-slate-800/50 hover:bg-indigo-600/50 text-slate-300 hover:text-white border border-slate-700 hover:border-indigo-500 rounded-lg transition-all"
+                                        >
+                                            {preset.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+
+                            {/* Search Results */}
+                            {clapResults.length > 0 && (
+                                <div className="space-y-2">
+                                    <h4 className="text-slate-500 text-xs font-mono uppercase">
+                                        ✨ 検索結果 (クリックで選択)
+                                    </h4>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                        {clapResults.map((result, idx) => (
+                                            <button
+                                                key={idx}
+                                                onClick={() => handleClapResultClick(result)}
+                                                className="flex items-center justify-between p-3 bg-slate-900/50 hover:bg-indigo-900/30 border border-slate-800 hover:border-indigo-500/50 rounded-xl transition-all group"
+                                            >
+                                                <div className="flex flex-col items-start">
+                                                    <span className="text-indigo-300 font-bold text-sm flex items-center gap-1">
+                                                        #{result.rank} {result.label}
+                                                    </span>
+                                                    <span className="text-slate-500 text-xs font-mono">
+                                                        {formatTime(result.start, 1)} - {formatTime(result.end, 1)}
+                                                    </span>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-xs text-slate-400">
+                                                        {(result.score * 100).toFixed(0)}%
+                                                    </span>
+                                                    <ArrowRight className="w-4 h-4 text-slate-600 group-hover:text-indigo-400 transition-colors" />
+                                                </div>
+                                            </button>
+                                        ))}
+                                    </div>
                                 </div>
                             )}
                         </div>
