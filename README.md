@@ -83,8 +83,8 @@ TAVILY_API_KEY=your_tavily_api_key
 
 | モデル名 | 説明 |
 |---------|------|
-| `gemini-2.0-flash-exp` | 最新・高速モデル（推奨） |
-| `gemini-1.5-pro` | 高度な推論用 |
+| `gemini-2.5-flash` | 最新・安定版（推奨） |
+| `gemini-3.0-flash-preview` | 最先端のプレビュー版 |
 
 ## 検索エンジンについて
 
