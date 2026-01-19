@@ -1,0 +1,15 @@
+fastapi
+uvicorn
+pydub
+numpy
+librosa
+transformers
+huggingface_hub
+torch
+torchaudio
+python-multipart
+exllamav2
+requests
+beautifulsoup4
+audio-separator[gpu]
+soundfile

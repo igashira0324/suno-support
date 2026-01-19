@@ -1,0 +1,35 @@
+{
+    "name": "suno-architect-v4.5",
+    "private": true,
+    "version": "0.0.0",
+    "type": "module",
+    "scripts": {
+        "dev": "vite",
+        "build": "vite build",
+        "preview": "vite preview",
+        "start:backend": "cd server && venv\\Scripts\\activate && python main.py",
+        "start:frontend": "vite",
+        "dev:all": "concurrently --kill-others --names \"BACKEND,FRONTEND\" --prefix-colors \"blue,green\" \"npm run start:backend\" \"npm run start:frontend\""
+    },
+    "dependencies": {
+        "@google/genai": "^1.30.0",
+        "clsx": "^2.1.1",
+        "lucide-react": "^0.473.0",
+        "react": "^19.0.0",
+        "react-dom": "^19.0.0",
+        "tailwind-merge": "^2.6.0",
+        "wavesurfer.js": "^7.12.1"
+    },
+    "devDependencies": {
+        "@types/node": "^22.10.7",
+        "@types/react": "^19.0.7",
+        "@types/react-dom": "^19.0.3",
+        "@vitejs/plugin-react": "^4.3.4",
+        "autoprefixer": "^10.4.20",
+        "concurrently": "^9.2.1",
+        "postcss": "^8.5.1",
+        "tailwindcss": "^3.4.17",
+        "typescript": "~5.7.3",
+        "vite": "^6.0.7"
+    }
+}
