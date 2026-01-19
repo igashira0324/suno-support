@@ -22,6 +22,29 @@ interface TaskState {
 
 type TrackType = 'original' | 'vocals' | 'instrumental';
 
+// Audio Analysis Types
+interface IntensityPoint {
+    time: number;
+    value: number;
+}
+
+interface AudioSegment {
+    start: number;
+    end: number;
+    intensity: number;
+    label: string;
+}
+
+interface AudioAnalysis {
+    success: boolean;
+    duration?: number;
+    bpm?: number;
+    key?: string;
+    intensity_curve?: IntensityPoint[];
+    segments?: AudioSegment[];
+    error?: string;
+}
+
 const MvProductionTab: React.FC = () => {
     const [state, setState] = useState<TaskState>({
         id: null,
@@ -46,6 +69,11 @@ const MvProductionTab: React.FC = () => {
     // Manual Input States
     const [startTimeInput, setStartTimeInput] = useState("--:--.--");
     const [endTimeInput, setEndTimeInput] = useState("--:--.--");
+
+    // Audio Analysis States
+    const [audioAnalysis, setAudioAnalysis] = useState<AudioAnalysis | null>(null);
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [showIntensityCurve, setShowIntensityCurve] = useState(true);
 
     const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -324,6 +352,51 @@ const MvProductionTab: React.FC = () => {
         setIsLooping(true);
         wavesurferRef.current.setTime(selectedRegion.start);
         wavesurferRef.current.play();
+    };
+
+    // Audio Analysis Functions
+    const analyzeCurrentTrack = async () => {
+        if (!state.result) return;
+
+        const trackUrl = activeTrack === 'original'
+            ? state.result.original_path
+            : activeTrack === 'vocals'
+                ? state.result.vocals_url
+                : state.result.instrumental_url;
+
+        if (!trackUrl) return;
+
+        setIsAnalyzing(true);
+        try {
+            const response = await fetch('http://localhost:8000/analyze', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ file_path: trackUrl })
+            });
+
+            if (!response.ok) throw new Error('Analysis failed');
+
+            const data: AudioAnalysis = await response.json();
+            setAudioAnalysis(data);
+        } catch (e) {
+            console.error('Audio analysis error:', e);
+            setAudioAnalysis(null);
+        } finally {
+            setIsAnalyzing(false);
+        }
+    };
+
+    const handleSegmentClick = (segment: AudioSegment) => {
+        if (!regionsPluginRef.current) return;
+        regionsPluginRef.current.clearRegions();
+        regionsPluginRef.current.addRegion({
+            start: segment.start,
+            end: segment.end,
+            color: 'rgba(255, 255, 255, 0.2)',
+            drag: true,
+            resize: true
+        });
+        setSelectedRegion({ start: segment.start, end: segment.end });
     };
 
     const handleDownloadSegment = async (e: React.MouseEvent) => {
@@ -658,10 +731,86 @@ const MvProductionTab: React.FC = () => {
                             </div>
                         </div>
 
+                        {/* Audio Analysis Panel */}
+                        <div className="bg-slate-950/80 rounded-3xl p-6 border border-white/5 space-y-4">
+                            <div className="flex items-center justify-between">
+                                <h3 className="text-slate-400 text-xs font-mono uppercase tracking-widest flex items-center gap-2">
+                                    <Scissors className="w-4 h-4" /> Audio Analysis
+                                </h3>
+                                <button
+                                    onClick={analyzeCurrentTrack}
+                                    disabled={isAnalyzing}
+                                    className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-all ${isAnalyzing ? 'bg-slate-800 text-slate-500' : 'bg-indigo-600 hover:bg-indigo-500 text-white'}`}
+                                >
+                                    {isAnalyzing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Music className="w-3.5 h-3.5" />}
+                                    {isAnalyzing ? 'Analyzing...' : 'Analyze Track'}
+                                </button>
+                            </div>
+
+                            {audioAnalysis && audioAnalysis.success && (
+                                <>
+                                    {/* BPM / Key Display */}
+                                    <div className="flex items-center gap-4">
+                                        <div className="flex items-center gap-2 bg-slate-900 px-4 py-2 rounded-xl border border-slate-800">
+                                            <span className="text-slate-500 text-xs">BPM:</span>
+                                            <span className="text-white font-bold text-lg">{audioAnalysis.bpm || '-'}</span>
+                                        </div>
+                                        <div className="flex items-center gap-2 bg-slate-900 px-4 py-2 rounded-xl border border-slate-800">
+                                            <span className="text-slate-500 text-xs">Key:</span>
+                                            <span className="text-white font-bold text-lg">{audioAnalysis.key || '-'}</span>
+                                        </div>
+                                    </div>
+
+                                    {/* Peak Segments */}
+                                    {audioAnalysis.segments && audioAnalysis.segments.length > 0 && (
+                                        <div className="space-y-2">
+                                            <h4 className="text-slate-500 text-xs font-mono uppercase">
+                                                🔥 Peak Segments (Click to Select)
+                                            </h4>
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                                                {audioAnalysis.segments.map((seg, idx) => (
+                                                    <button
+                                                        key={idx}
+                                                        onClick={() => handleSegmentClick(seg)}
+                                                        className="flex items-center justify-between p-3 bg-slate-900/50 hover:bg-slate-800 border border-slate-800 hover:border-indigo-500/50 rounded-xl transition-all group"
+                                                    >
+                                                        <div className="flex flex-col items-start">
+                                                            <span className="text-white font-bold text-sm">{seg.label}</span>
+                                                            <span className="text-slate-500 text-xs font-mono">
+                                                                {formatTime(seg.start, 1)} - {formatTime(seg.end, 1)}
+                                                            </span>
+                                                        </div>
+                                                        <div className="flex items-center gap-2">
+                                                            <div
+                                                                className="w-12 h-2 bg-slate-800 rounded-full overflow-hidden"
+                                                                title={`Intensity: ${Math.round(seg.intensity * 100)}%`}
+                                                            >
+                                                                <div
+                                                                    className="h-full bg-gradient-to-r from-indigo-500 to-pink-500 transition-all"
+                                                                    style={{ width: `${seg.intensity * 100}%` }}
+                                                                />
+                                                            </div>
+                                                            <ArrowRight className="w-4 h-4 text-slate-600 group-hover:text-indigo-400 transition-colors" />
+                                                        </div>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </>
+                            )}
+
+                            {audioAnalysis && !audioAnalysis.success && (
+                                <div className="text-red-400 text-sm">
+                                    Analysis failed: {audioAnalysis.error}
+                                </div>
+                            )}
+                        </div>
+
                         <div className="grid grid-cols-2 gap-4">
                             <a
-                                href={`http://localhost:8000${state.result.vocals_url}`}
-                                onClick={(e) => handleDownloadFile(e, `http://localhost:8000${state.result.vocals_url}`, 'vocals.wav')}
+                                href={state.result?.vocals_url ? `http://localhost:8000${state.result.vocals_url}` : '#'}
+                                onClick={(e) => state.result?.vocals_url && handleDownloadFile(e, `http://localhost:8000${state.result.vocals_url}`, 'vocals.wav')}
                                 className={`flex items-center justify-between p-4 bg-indigo-500/5 border border-indigo-500/10 rounded-2xl hover:bg-indigo-500/10 hover:border-indigo-500/30 transition-all text-indigo-300 group cursor-pointer ${isDownloading ? 'opacity-50 pointer-events-none' : ''}`}
                             >
                                 <span className="flex items-center gap-2 font-bold text-sm">
@@ -670,8 +819,8 @@ const MvProductionTab: React.FC = () => {
                                 <Download className="w-4 h-4 opacity-50 group-hover:opacity-100 transition-opacity" />
                             </a>
                             <a
-                                href={`http://localhost:8000${state.result.instrumental_url}`}
-                                onClick={(e) => handleDownloadFile(e, `http://localhost:8000${state.result.instrumental_url}`, 'instrumental.wav')}
+                                href={state.result?.instrumental_url ? `http://localhost:8000${state.result.instrumental_url}` : '#'}
+                                onClick={(e) => state.result?.instrumental_url && handleDownloadFile(e, `http://localhost:8000${state.result.instrumental_url}`, 'instrumental.wav')}
                                 className={`flex items-center justify-between p-4 bg-violet-500/5 border border-violet-500/10 rounded-2xl hover:bg-violet-500/10 hover:border-violet-500/30 transition-all text-violet-300 group cursor-pointer ${isDownloading ? 'opacity-50 pointer-events-none' : ''}`}
                             >
                                 <span className="flex items-center gap-2 font-bold text-sm">

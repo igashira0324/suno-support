@@ -1,12 +1,12 @@
 # Suno Architect Suite (v4.5 Hybrid)
 
 Suno AI (v4.5) のポテンシャルを最大限に引き出すための統合開発環境です。
-Gemini 2.0 Flash / 1.5 Pro などの最新AIモデルを活用し、プロンプト生成から歌詞生成、MV制作支援までをワンストップで行えます。
+Gemini 2.5 Flash / 3.0 Flash Preview などの最新AIモデルを活用し、プロンプト生成から歌詞生成、MV制作支援までをワンストップで行えます。
 
 ## ✨ 主な機能
 
 ### 1. Advanced Prompt Generation
-*   **Gemini 2.0 Flash / 1.5 Pro Integration**: 最新の高精度・高速モデルを使用し、入力されたイメージから最適なSuno v4.5用プロンプトを生成します。
+*   **Gemini 2.5 Flash / 3.0 Flash Preview Integration**: 最新の高精度・高速モデルを使用し、入力されたイメージから最適なSuno v4.5用プロンプトを生成します。
 *   **Search Engine Integration**: Google Grounding、Google Custom Search、または Tavily を使用し、最新の音楽トレンドやアーティスト情報を加味したプロンプト作成が可能です。
 *   **Suno URL Analysis**: 既存のSuno楽曲URLを入力すると、そのメタデータ（タイトル、プロンプト、スタイル）を解析し、それをベースに新しいプロンプトを作成できます。
     *   **New!**: `/s/` 形式の短縮URLにも対応。

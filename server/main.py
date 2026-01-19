@@ -21,6 +21,7 @@ import numpy as np
 import torch
 import torchaudio
 import yue_service
+import audio_analysis
 
 app = FastAPI()
 
@@ -256,6 +257,43 @@ async def cancel_task(task_id: str):
         # but the run_separation_task checks status after processing.
         return {"message": "Cancellation requested"}
     raise HTTPException(status_code=404, detail="Task not found")
+
+class AnalyzeRequest(BaseModel):
+    file_path: str
+
+@app.post("/analyze")
+async def analyze_audio(request: AnalyzeRequest):
+    """
+    Analyze audio file for intensity curve, BPM, key, and peak segments.
+    file_path should be a web path like /uploads/xxx.mp3 or /outputs/separated/xxx/vocals.wav
+    """
+    try:
+        # Convert web path to filesystem path
+        web_path = request.file_path
+        if web_path.startswith("/uploads/"):
+            fs_path = UPLOAD_DIR / web_path.replace("/uploads/", "")
+        elif web_path.startswith("/outputs/"):
+            fs_path = OUTPUT_DIR / web_path.replace("/outputs/", "")
+        else:
+            # Assume it's already a filesystem path
+            fs_path = Path(web_path)
+        
+        if not fs_path.exists():
+            raise HTTPException(status_code=404, detail=f"File not found: {fs_path}")
+        
+        analyzer = audio_analysis.get_analyzer()
+        result = analyzer.analyze(str(fs_path))
+        
+        if not result.get("success"):
+            raise HTTPException(status_code=500, detail=result.get("error", "Analysis failed"))
+        
+        return result
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Audio analysis error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/suno/analyze")
 async def analyze_suno(url: str = Body(..., embed=True)):
