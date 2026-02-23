@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Upload, Music, Mic2, MicOff, Loader2, Play, Pause, Download, AlertCircle, CheckCircle2, Scissors, Layers, ZoomIn, ZoomOut, Volume2, ArrowRight, Repeat, Square } from 'lucide-react';
+import { Upload, Music, Mic2, MicOff, Loader2, Play, Pause, Download, AlertCircle, CheckCircle2, Scissors, Layers, ZoomIn, ZoomOut, Volume2, ArrowRight, Repeat, Square, Globe, Link, Settings2, FileAudio } from 'lucide-react';
 import WaveSurfer from 'wavesurfer.js';
 import RegionsPlugin from 'wavesurfer.js/dist/plugins/regions.esm.js';
 import TimelinePlugin from 'wavesurfer.js/dist/plugins/timeline.esm.js';
@@ -14,10 +14,27 @@ interface SeparationResult {
 
 interface TaskState {
     id: string | null;
-    status: 'idle' | 'uploading' | 'queued' | 'processing' | 'completed' | 'failed' | 'cancelled';
+    status: 'idle' | 'uploading' | 'downloading' | 'queued' | 'processing' | 'completed' | 'failed' | 'cancelled';
     progress: number;
     error: string | null;
     result: SeparationResult | null;
+    originalName?: string;
+}
+
+interface VoiceChangeState {
+    status: 'idle' | 'converting' | 'done' | 'failed';
+    taskId: string | null;
+    progress: number;
+    newVocalsFile: File | null;
+    originalUrl?: string | null;
+    mergedUrl: string | null;
+    error: string | null;
+    processingTime?: number;
+    // Tuning Parameters
+    diffusionSteps: number;
+    pitchShift: number;
+    f0Condition: boolean;
+    autoF0Adjust: boolean;
 }
 
 type TrackType = 'original' | 'vocals' | 'instrumental';
@@ -76,6 +93,22 @@ const MvProductionTab: React.FC = () => {
         result: null
     });
 
+    const [voiceChange, setVoiceChange] = useState<VoiceChangeState>({
+        status: 'idle',
+        taskId: null,
+        progress: 0,
+        newVocalsFile: null,
+        originalUrl: null,
+        mergedUrl: null,
+        error: null,
+        diffusionSteps: 50,
+        pitchShift: 0,
+        f0Condition: true,
+        autoF0Adjust: false
+    });
+
+    const vcPollRef = useRef<NodeJS.Timeout | null>(null);
+
     const [activeTrack, setActiveTrack] = useState<TrackType>('original');
     const [isPlaying, setIsPlaying] = useState(false);
     const [isLooping, setIsLooping] = useState(false);
@@ -102,6 +135,7 @@ const MvProductionTab: React.FC = () => {
     const [clapResults, setClapResults] = useState<CLAPResult[]>([]);
     const [clapPresets, setClapPresets] = useState<CLAPPreset[]>([]);
     const [isSearching, setIsSearching] = useState(false);
+    const [importUrl, setImportUrl] = useState('');
 
     const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -150,7 +184,7 @@ const MvProductionTab: React.FC = () => {
 
     const getTrackUrl = (type: TrackType) => {
         if (!state.result) return '';
-        const baseUrl = 'http://localhost:8000';
+        const baseUrl = 'http://localhost:8100';
         switch (type) {
             case 'vocals': return state.result.vocals_url ? `${baseUrl}${state.result.vocals_url}` : '';
             case 'instrumental': return state.result.instrumental_url ? `${baseUrl}${state.result.instrumental_url}` : '';
@@ -358,7 +392,7 @@ const MvProductionTab: React.FC = () => {
         if (!state.id || isCancelling) return;
         setIsCancelling(true);
         try {
-            await fetch(`http://localhost:8000/task/${state.id}/cancel`, { method: 'POST' });
+            await fetch(`http://localhost:8100/task/${state.id}/cancel`, { method: 'POST' });
             if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
             setState(prev => ({ ...prev, status: 'cancelled', progress: 0 }));
             // Optional: wait a bit then go back to idle? Or stay in cancelled state?
@@ -396,7 +430,7 @@ const MvProductionTab: React.FC = () => {
 
         setIsAnalyzing(true);
         try {
-            const response = await fetch('http://localhost:8000/analyze', {
+            const response = await fetch('http://localhost:8100/analyze', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ file_path: trackUrl })
@@ -430,7 +464,7 @@ const MvProductionTab: React.FC = () => {
     // CLAP Search Functions
     const loadClapPresets = async () => {
         try {
-            const response = await fetch('http://localhost:8000/clap/presets');
+            const response = await fetch('http://localhost:8100/clap/presets');
             if (response.ok) {
                 const data = await response.json();
                 setClapPresets(data.presets || []);
@@ -456,7 +490,7 @@ const MvProductionTab: React.FC = () => {
         setIsSearching(true);
         setClapResults([]);
         try {
-            const response = await fetch('http://localhost:8000/clap/search', {
+            const response = await fetch('http://localhost:8100/clap/search', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -505,7 +539,7 @@ const MvProductionTab: React.FC = () => {
             formData.append('start_time', selectedRegion.start.toString());
             formData.append('end_time', selectedRegion.end.toString());
 
-            const response = await fetch('http://localhost:8000/trim', {
+            const response = await fetch('http://localhost:8100/trim', {
                 method: 'POST',
                 body: formData,
             });
@@ -567,7 +601,7 @@ const MvProductionTab: React.FC = () => {
         formData.append('file', file);
 
         try {
-            const response = await fetch('http://localhost:8000/separate', {
+            const response = await fetch('http://localhost:8100/separate', {
                 method: 'POST',
                 body: formData
             });
@@ -575,8 +609,36 @@ const MvProductionTab: React.FC = () => {
             if (!response.ok) throw new Error('Failed to upload file');
 
             const data = await response.json();
-            setState(prev => ({ ...prev, id: data.task_id, status: 'queued' }));
+            setState(prev => ({ ...prev, id: data.task_id, status: 'queued', originalName: file.name }));
             startPolling(data.task_id);
+        } catch (err: any) {
+            setState(prev => ({ ...prev, status: 'failed', error: err.message }));
+        }
+    };
+
+    const handleUrlImport = async () => {
+        if (!importUrl.trim()) return;
+
+        setState({ id: null, status: 'downloading', progress: 0, error: null, result: null });
+        setActiveTrack('original');
+        wasPlayingRef.current = false;
+        setCurrentTime(0);
+        setSelectedRegion(null);
+
+        try {
+            const response = await fetch('http://localhost:8100/separate-url', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url: importUrl })
+            });
+
+            if (!response.ok) throw new Error('Failed to start URL import');
+
+            const data = await response.json();
+            const urlName = importUrl.split(/[?#]/)[0].split('/').pop() || 'URL_Import';
+            setState(prev => ({ ...prev, id: data.task_id, status: 'downloading', originalName: urlName }));
+            startPolling(data.task_id);
+            setImportUrl('');
         } catch (err: any) {
             setState(prev => ({ ...prev, status: 'failed', error: err.message }));
         }
@@ -586,7 +648,7 @@ const MvProductionTab: React.FC = () => {
         if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
         pollIntervalRef.current = setInterval(async () => {
             try {
-                const response = await fetch(`http://localhost:8000/task/${taskId}?t=${Date.now()}`);
+                const response = await fetch(`http://localhost:8100/task/${taskId}?t=${Date.now()}`);
                 if (!response.ok) throw new Error('Task not found');
                 const data = await response.json();
 
@@ -617,6 +679,68 @@ const MvProductionTab: React.FC = () => {
         }, 1000);
     };
 
+    const handleNewVocalsUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files[0]) {
+            setVoiceChange(prev => ({ ...prev, newVocalsFile: e.target.files![0] }));
+        }
+    };
+
+    const handleConvertAndMerge = async () => {
+        if (!state.result?.instrumental_url || !state.result?.vocals_url || !voiceChange.newVocalsFile) return;
+        setVoiceChange(prev => ({ ...prev, status: 'converting', progress: 0, error: null }));
+        try {
+            const formData = new FormData();
+            formData.append('instrumental_url', state.result.instrumental_url);
+            formData.append('vocals_url', state.result.vocals_url);
+            // Use the original_path from separation result (returned by backend)
+            const originalPath = (state.result as any)?.original_path;
+            if (originalPath) {
+                formData.append('original_url', originalPath);
+            }
+            formData.append('reference_audio', voiceChange.newVocalsFile);
+            formData.append('diffusion_steps', voiceChange.diffusionSteps.toString());
+            formData.append('pitch_shift', voiceChange.pitchShift.toString());
+            formData.append('f0_condition', voiceChange.f0Condition.toString());
+            formData.append('auto_f0_adjust', voiceChange.autoF0Adjust.toString());
+
+            const res = await fetch('http://localhost:8100/voice-convert', {
+                method: 'POST',
+                body: formData
+            });
+            if (!res.ok) throw new Error('Conversion failed to start');
+            const data = await res.json();
+
+            setVoiceChange(prev => ({ ...prev, taskId: data.task_id }));
+
+            if (vcPollRef.current) clearInterval(vcPollRef.current);
+            vcPollRef.current = setInterval(async () => {
+                try {
+                    const statusRes = await fetch(`http://localhost:8100/task/${data.task_id}`);
+                    if (!statusRes.ok) return;
+                    const statusData = await statusRes.json();
+                    setVoiceChange(prev => ({ ...prev, progress: statusData.progress || 0 }));
+
+                    if (statusData.status === 'completed') {
+                        if (vcPollRef.current) clearInterval(vcPollRef.current);
+                        setVoiceChange(prev => ({
+                            ...prev,
+                            status: 'done',
+                            progress: 100,
+                            mergedUrl: `http://localhost:8100${statusData.result?.merged_url}`,
+                            processingTime: statusData.result?.processing_time
+                        }));
+                    } else if (statusData.status === 'failed') {
+                        if (vcPollRef.current) clearInterval(vcPollRef.current);
+                        setVoiceChange(prev => ({ ...prev, status: 'failed', error: statusData.error || 'Voice Conversion failed' }));
+                    }
+                } catch (e) { console.error('VC poll error', e); }
+            }, 2000);
+
+        } catch (err: any) {
+            setVoiceChange(prev => ({ ...prev, status: 'failed', error: err.message }));
+        }
+    };
+
     const triggerUpload = () => fileInputRef.current?.click();
 
     const formatTime = (seconds: number, precision = 0) => {
@@ -642,17 +766,58 @@ const MvProductionTab: React.FC = () => {
                 </div>
 
                 {state.status === 'idle' && (
-                    <div onClick={triggerUpload} className="group border-2 border-dashed border-slate-800 hover:border-indigo-500/50 bg-slate-950/50 rounded-3xl p-16 text-center cursor-pointer transition-all hover:bg-slate-900/50">
-                        <div className="w-20 h-20 bg-slate-900 rounded-full flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform duration-300">
-                            <Upload className="w-8 h-8 text-indigo-400" />
+                    <div className="space-y-6">
+                        <div className="group border-2 border-dashed border-slate-800 hover:border-indigo-500/50 bg-slate-950/50 rounded-3xl p-12 text-center cursor-pointer transition-all hover:bg-slate-900/50" onClick={triggerUpload}>
+                            <div className="w-16 h-16 bg-slate-900 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform duration-300">
+                                <Upload className="w-6 h-6 text-indigo-400" />
+                            </div>
+                            <h3 className="text-lg font-bold text-slate-200 mb-1">Upload Audio File</h3>
+                            <p className="text-slate-500 text-xs max-w-sm mx-auto">MP3, WAV, or AAC. GPU Acceleration Enabled.</p>
+                            <input type="file" ref={fileInputRef} onChange={handleFileSelect} accept="audio/*" className="hidden" />
                         </div>
-                        <h3 className="text-xl font-bold text-slate-200 mb-2">Upload Audio File</h3>
-                        <p className="text-slate-500 text-sm max-w-sm mx-auto">MP3, WAV, or AAC. GPU Acceleration Enabled.</p>
-                        <input type="file" ref={fileInputRef} onChange={handleFileSelect} accept="audio/*" className="hidden" />
+
+                        <div className="relative flex items-center gap-4">
+                            <div className="flex-1 h-px bg-slate-800"></div>
+                            <span className="text-[10px] font-black text-slate-600 uppercase tracking-[0.2em]">OR</span>
+                            <div className="flex-1 h-px bg-slate-800"></div>
+                        </div>
+
+                        <div className="bg-slate-950/50 border border-slate-800 rounded-2xl p-6 space-y-4">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-1.5">
+                                <Globe className="w-3.5 h-3.5 text-indigo-400" />
+                                Import from URL (YouTube, TikTok, Suno, etc.)
+                            </label>
+                            <div className="flex gap-2">
+                                <div className="relative flex-1">
+                                    <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
+                                        <Link className="w-4 h-4 text-slate-600" />
+                                    </div>
+                                    <input
+                                        type="text"
+                                        value={importUrl}
+                                        onChange={(e) => setImportUrl(e.target.value)}
+                                        onKeyDown={(e) => e.key === 'Enter' && handleUrlImport()}
+                                        placeholder="Paste URL here..."
+                                        className="w-full bg-slate-900/80 text-white pl-11 pr-4 py-3 rounded-xl border border-slate-800 focus:border-indigo-500/50 focus:outline-none placeholder-slate-600 text-sm transition-all"
+                                    />
+                                </div>
+                                <button
+                                    onClick={handleUrlImport}
+                                    disabled={!importUrl.trim()}
+                                    className={`px-6 py-3 rounded-xl font-bold text-sm transition-all flex items-center gap-2 ${!importUrl.trim() ? 'bg-slate-900 text-slate-600' : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-500/20'}`}
+                                >
+                                    <Download className="w-4 h-4" />
+                                    Import
+                                </button>
+                            </div>
+                            <p className="text-[10px] text-slate-500 pl-1">
+                                Supported: YouTube Videos & Shorts, TikTok, Suno.ai, SoundCloud, and direct audio links.
+                            </p>
+                        </div>
                     </div>
                 )}
 
-                {(state.status === 'uploading' || state.status === 'queued' || state.status === 'processing' || state.status === 'cancelled') && (
+                {(state.status === 'uploading' || state.status === 'downloading' || state.status === 'queued' || state.status === 'processing' || state.status === 'cancelled') && (
                     <div className="bg-slate-950/80 rounded-3xl p-12 border border-white/5 text-center space-y-8 animate-in fade-in duration-500 relative">
                         {state.status !== 'cancelled' && (
                             <button
@@ -678,8 +843,9 @@ const MvProductionTab: React.FC = () => {
                         <div className="space-y-2">
                             <h3 className="text-xl font-bold text-white">
                                 {state.status === 'uploading' ? 'Uploading File...' :
-                                    state.status === 'queued' ? 'Queued for processing...' :
-                                        state.status === 'cancelled' ? 'Cancelling...' : 'Separating Audio...'}
+                                    state.status === 'downloading' ? 'Downloading from URL...' :
+                                        state.status === 'queued' ? 'Queued for processing...' :
+                                            state.status === 'cancelled' ? 'Cancelling...' : 'Separating Audio...'}
                             </h3>
                             <p className="text-slate-400 text-sm">
                                 {state.status === 'cancelled' ? 'Cleaning up...' : 'Separating Vocals and Instrumentals...'}
@@ -901,96 +1067,220 @@ const MvProductionTab: React.FC = () => {
                             )}
                         </div>
 
-                        {/* Smart Range Selector (CLAP) */}
-                        <div className="bg-gradient-to-br from-indigo-950/50 to-purple-950/50 rounded-3xl p-6 border border-indigo-500/20 space-y-4">
+                        {/* Voice Change Suite (Seed-VC) */}
+                        <div className="bg-gradient-to-br from-indigo-900/40 via-purple-900/40 to-slate-900/40 rounded-3xl p-6 border border-indigo-500/30 space-y-4 shadow-xl">
                             <div className="flex items-center justify-between">
-                                <h3 className="text-indigo-300 text-xs font-mono uppercase tracking-widest flex items-center gap-2">
-                                    🔍 Smart Range Selector (AI)
+                                <h3 className="text-amber-400 text-xs font-black uppercase tracking-[0.2em] flex items-center gap-2">
+                                    <Mic2 className="w-4 h-4" /> Voice Change Suite (Seed-VC)
                                 </h3>
-                                <button
-                                    onClick={loadClapPresets}
-                                    className="text-xs text-slate-500 hover:text-white transition-colors"
-                                >
-                                    Load Presets
-                                </button>
-                            </div>
-
-                            {/* Search Input */}
-                            <div className="flex gap-2">
-                                <input
-                                    type="text"
-                                    value={clapQuery}
-                                    onChange={(e) => setClapQuery(e.target.value)}
-                                    onKeyDown={(e) => e.key === 'Enter' && handleClapSearch()}
-                                    placeholder="例: 盛り上がる歌声、静かなパート、サビの部分..."
-                                    className="flex-1 bg-slate-900/50 text-white px-4 py-3 rounded-xl border border-slate-700 focus:border-indigo-500 focus:outline-none placeholder-slate-600 text-sm"
-                                />
-                                <button
-                                    onClick={() => handleClapSearch()}
-                                    disabled={isSearching || !clapQuery.trim()}
-                                    className={`px-6 py-3 rounded-xl font-bold text-sm transition-all flex items-center gap-2 ${isSearching || !clapQuery.trim() ? 'bg-slate-800 text-slate-500' : 'bg-indigo-600 hover:bg-indigo-500 text-white'}`}
-                                >
-                                    {isSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Music className="w-4 h-4" />}
-                                    {isSearching ? '検索中...' : '検索'}
-                                </button>
-                            </div>
-
-                            {/* Preset Buttons */}
-                            {clapPresets.length > 0 && (
-                                <div className="flex flex-wrap gap-2">
-                                    {clapPresets.map((preset) => (
-                                        <button
-                                            key={preset.id}
-                                            onClick={() => {
-                                                setClapQuery(preset.query);
-                                                handleClapSearch(preset.query);
-                                            }}
-                                            className="px-3 py-1.5 text-xs bg-slate-800/50 hover:bg-indigo-600/50 text-slate-300 hover:text-white border border-slate-700 hover:border-indigo-500 rounded-lg transition-all"
-                                        >
-                                            {preset.label}
-                                        </button>
-                                    ))}
+                                <div className="px-2 py-0.5 bg-amber-500/10 border border-amber-500/20 rounded text-[9px] text-amber-500 font-bold uppercase tracking-widest">
+                                    Premium AI
                                 </div>
-                            )}
+                            </div>
 
-                            {/* Search Results */}
-                            {clapResults.length > 0 && (
-                                <div className="space-y-2">
-                                    <h4 className="text-slate-500 text-xs font-mono uppercase">
-                                        ✨ 検索結果 (クリックで選択)
-                                    </h4>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                        {clapResults.map((result, idx) => (
+                            {voiceChange.status === 'idle' || voiceChange.status === 'failed' ? (
+                                <div className="space-y-4">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5 ml-1">
+                                                <Upload className="w-3 h-3" /> Step 1: Upload Target Voice
+                                            </label>
+                                            <div className={`relative w-full h-24 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center cursor-pointer transition-all ${voiceChange.newVocalsFile ? 'border-amber-500/50 bg-amber-500/5' : 'border-slate-800 hover:border-slate-600 bg-slate-950/30'}`}>
+                                                <input
+                                                    type="file"
+                                                    accept="audio/*,.mp3,.wav,.flac,.ogg,.m4a"
+                                                    onChange={handleNewVocalsUpload}
+                                                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                                                />
+                                                {voiceChange.newVocalsFile ? (
+                                                    <div className="flex flex-col items-center gap-1 px-4">
+                                                        <CheckCircle2 className="w-6 h-6 text-amber-500 mb-1" />
+                                                        <span className="text-xs font-bold text-amber-300 text-center truncate max-w-full">
+                                                            {voiceChange.newVocalsFile.name}
+                                                        </span>
+                                                        <span className="text-[9px] text-slate-500 uppercase font-black tracking-tighter">Ready to convert</span>
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex flex-col items-center gap-2 px-4">
+                                                        <div className="p-2 bg-slate-900 rounded-lg">
+                                                            <Upload className="w-4 h-4 text-slate-500" />
+                                                        </div>
+                                                        <div className="text-center text-[9px] text-slate-500 font-bold uppercase tracking-wider leading-tight">
+                                                            Drop a voice sample (10-30s)<br />
+                                                            <span className="text-slate-700">.wav, .mp3, .m4a</span>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        <div className="flex flex-col justify-end space-y-3 pb-1">
+                                            <div className="bg-slate-900/40 rounded-2xl p-4 border border-white/5 space-y-4">
+                                                <div className="flex items-center gap-2 mb-1">
+                                                    <Settings2 className="w-3.5 h-3.5 text-indigo-400" />
+                                                    <span className="text-[10px] font-black uppercase tracking-widest text-indigo-300">SVC Pro Tuning / 詳細設定</span>
+                                                </div>
+
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                                    <div className="space-y-1.5">
+                                                        <div className="flex justify-between text-[9px] font-bold text-slate-500 uppercase tracking-wider">
+                                                            <span>Diffusion Steps</span>
+                                                            <span className="text-indigo-400">{voiceChange.diffusionSteps}</span>
+                                                        </div>
+                                                        <input
+                                                            type="range" min="4" max="100" step="1"
+                                                            value={voiceChange.diffusionSteps}
+                                                            onChange={(e) => setVoiceChange(p => ({ ...p, diffusionSteps: parseInt(e.target.value) }))}
+                                                            className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                                                        />
+                                                        <p className="text-[7px] text-slate-600 italic">Density/Quality. higher=better. / 変換密度。高いほど高品質になります。</p>
+                                                    </div>
+
+                                                    <div className="space-y-1.5">
+                                                        <div className="flex justify-between text-[9px] font-bold text-slate-500 uppercase tracking-wider">
+                                                            <span>Pitch Shift</span>
+                                                            <span className={voiceChange.pitchShift === 0 ? "text-slate-500" : "text-amber-400"}>
+                                                                {voiceChange.pitchShift > 0 ? `+${voiceChange.pitchShift}` : voiceChange.pitchShift}
+                                                            </span>
+                                                        </div>
+                                                        <input
+                                                            type="range" min="-12" max="12" step="1"
+                                                            value={voiceChange.pitchShift}
+                                                            onChange={(e) => setVoiceChange(p => ({ ...p, pitchShift: parseInt(e.target.value) }))}
+                                                            className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                                                        />
+                                                        <p className="text-[7px] text-slate-600 italic">Adjust vocal pitch. / 声の高さを半音単位で調整します。</p>
+                                                    </div>
+                                                </div>
+
+                                                <div className="flex flex-wrap gap-4 pt-1">
+                                                    <div className="space-y-0.5">
+                                                        <label className="flex items-center gap-2 cursor-pointer group">
+                                                            <div
+                                                                onClick={() => setVoiceChange(p => ({ ...p, f0Condition: !p.f0Condition }))}
+                                                                className={`w-7 h-3.5 rounded-full transition-colors relative ${voiceChange.f0Condition ? 'bg-indigo-600' : 'bg-slate-800'}`}
+                                                            >
+                                                                <div className={`absolute top-0.5 left-0.5 w-2.5 h-2.5 bg-white rounded-full transition-transform ${voiceChange.f0Condition ? 'translate-x-3.5' : 'translate-x-0'}`} />
+                                                            </div>
+                                                            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider group-hover:text-slate-300">F0 Condition</span>
+                                                        </label>
+                                                        <p className="text-[7px] text-slate-700 pl-9 italic">Pitch tracking. / ピッチ追従改善。</p>
+                                                    </div>
+
+                                                    <div className="space-y-0.5">
+                                                        <label className="flex items-center gap-2 cursor-pointer group">
+                                                            <div
+                                                                onClick={() => setVoiceChange(p => ({ ...p, autoF0Adjust: !p.autoF0Adjust }))}
+                                                                className={`w-7 h-3.5 rounded-full transition-colors relative ${voiceChange.autoF0Adjust ? 'bg-amber-600' : 'bg-slate-800'}`}
+                                                            >
+                                                                <div className={`absolute top-0.5 left-0.5 w-2.5 h-2.5 bg-white rounded-full transition-transform ${voiceChange.autoF0Adjust ? 'translate-x-3.5' : 'translate-x-0'}`} />
+                                                            </div>
+                                                            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider group-hover:text-slate-300">Auto Pitch</span>
+                                                        </label>
+                                                        <p className="text-[7px] text-slate-700 pl-9 italic">Auto pitch correction. / 自動ピッチ補正。</p>
+                                                    </div>
+                                                </div>
+                                            </div>
                                             <button
-                                                key={idx}
-                                                onClick={() => handleClapResultClick(result)}
-                                                className="flex items-center justify-between p-3 bg-slate-900/50 hover:bg-indigo-900/30 border border-slate-800 hover:border-indigo-500/50 rounded-xl transition-all group"
+                                                onClick={handleConvertAndMerge}
+                                                disabled={!voiceChange.newVocalsFile}
+                                                className={`w-full py-3.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 shadow-lg ${!voiceChange.newVocalsFile
+                                                    ? 'bg-slate-800 text-slate-600 cursor-not-allowed'
+                                                    : 'bg-gradient-to-r from-amber-600 to-orange-600 text-white hover:shadow-amber-500/30 hover:scale-[1.02] active:scale-[0.98]'
+                                                    }`}
                                             >
-                                                <div className="flex flex-col items-start">
-                                                    <span className="text-indigo-300 font-bold text-sm flex items-center gap-1">
-                                                        #{result.rank} {result.label}
-                                                    </span>
-                                                    <span className="text-slate-500 text-xs font-mono">
-                                                        {formatTime(result.start, 1)} - {formatTime(result.end, 1)}
-                                                    </span>
-                                                </div>
-                                                <div className="flex items-center gap-2">
-                                                    <span className="text-xs text-slate-400">
-                                                        {(result.score * 100).toFixed(0)}%
-                                                    </span>
-                                                    <ArrowRight className="w-4 h-4 text-slate-600 group-hover:text-indigo-400 transition-colors" />
-                                                </div>
+                                                <ArrowRight className="w-4 h-4" />
+                                                Convert & Create / 声質変換を実行
                                             </button>
-                                        ))}
+                                        </div>
                                     </div>
+                                    {voiceChange.error && (
+                                        <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-[10px] font-bold flex items-start gap-2">
+                                            <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                                            {voiceChange.error}
+                                        </div>
+                                    )}
+                                </div>
+                            ) : voiceChange.status === 'converting' ? (
+                                <div className="py-6 space-y-4">
+                                    <div className="flex items-center justify-between text-[11px] font-black uppercase tracking-[0.15em] text-amber-300">
+                                        <div className="flex items-center gap-3">
+                                            <Loader2 className="w-5 h-5 animate-spin text-amber-500" />
+                                            AI Voice Morphing & Merging...
+                                        </div>
+                                        <span className="bg-amber-500/20 px-2 py-0.5 rounded tabular-nums">
+                                            {Math.round(voiceChange.progress)}%
+                                        </span>
+                                    </div>
+                                    <div className="w-full bg-slate-950 h-2.5 rounded-full overflow-hidden shadow-inner ring-1 ring-white/5">
+                                        <div
+                                            className="h-full transition-all duration-700 ease-out bg-gradient-to-r from-amber-600 via-orange-500 to-yellow-400 relative"
+                                            style={{ width: `${voiceChange.progress}%` }}
+                                        >
+                                            <div className="absolute inset-0 bg-white/20 animate-pulse" />
+                                        </div>
+                                    </div>
+                                    <div className="flex justify-between items-center text-[9px] font-bold text-slate-500 uppercase tracking-widest">
+                                        <span>Initializing Models / モデル準備中</span>
+                                        <span>Estimated: 1-2 min (GPU)</span>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="py-2 space-y-4 animate-in zoom-in-95 duration-500">
+                                    <div className="flex items-center justify-between p-4 bg-green-500/10 border border-green-500/20 rounded-2xl">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 bg-green-500/20 rounded-full flex items-center justify-center">
+                                                <CheckCircle2 className="w-5 h-5 text-green-400" />
+                                            </div>
+                                            <div>
+                                                <h4 className="text-white text-sm font-bold flex items-center gap-2">
+                                                    {voiceChange.processingTime && (
+                                                        <span className="text-[10px] text-slate-400 font-medium bg-slate-800/50 px-2 py-0.5 rounded ml-2">
+                                                            ⏱️ {Math.floor(voiceChange.processingTime / 60)}m {Math.floor(voiceChange.processingTime % 60)}s
+                                                        </span>
+                                                    )}
+                                                </h4>
+                                                <p className="text-[10px] text-green-400/70 font-medium uppercase tracking-wider">Vocals morphed with Seed-VC</p>
+                                            </div>
+                                        </div>
+                                        <button
+                                            onClick={() => setVoiceChange({ ...voiceChange, status: 'idle', mergedUrl: null })}
+                                            className="text-[10px] font-black text-slate-400 hover:text-white uppercase tracking-widest"
+                                        >
+                                            Discard / 戻る
+                                        </button>
+                                    </div>
+
+                                    {voiceChange.mergedUrl && (
+                                        <div className="bg-slate-950/50 p-4 rounded-2xl border border-white/5 space-y-4">
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Merged Result Preview</span>
+                                                <a
+                                                    href={voiceChange.mergedUrl}
+                                                    onClick={(e) => {
+                                                        const orig = state.originalName?.replace(/\.[^/.]+$/, "") || "Original";
+                                                        const singer = voiceChange.newVocalsFile?.name?.replace(/\.[^/.]+$/, "") || "Cover";
+                                                        const safeName = `[${singer}]_${orig}.wav`.replace(/[\/\\?%*:|"<>]/g, '-');
+                                                        if (voiceChange.mergedUrl) handleDownloadFile(e, voiceChange.mergedUrl, safeName);
+                                                    }}
+                                                    download="vc_merged_result.wav"
+                                                    className={`flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-white hover:text-indigo-600 text-white rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${isDownloading ? 'opacity-50 pointer-events-none' : ''}`}
+                                                >
+                                                    {isDownloading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+                                                    {isDownloading ? 'Downloading...' : 'Download Result'}
+                                                </a>
+                                            </div>
+                                            <audio controls src={voiceChange.mergedUrl} className="w-full h-10 accent-indigo-500" />
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">
                             <a
-                                href={state.result?.vocals_url ? `http://localhost:8000${state.result.vocals_url}` : '#'}
-                                onClick={(e) => state.result?.vocals_url && handleDownloadFile(e, `http://localhost:8000${state.result.vocals_url}`, 'vocals.wav')}
+                                href={state.result?.vocals_url ? `http://localhost:8100${state.result.vocals_url}` : '#'}
+                                onClick={(e) => state.result?.vocals_url && handleDownloadFile(e, `http://localhost:8100${state.result.vocals_url}`, 'vocals.wav')}
                                 className={`flex items-center justify-between p-4 bg-indigo-500/5 border border-indigo-500/10 rounded-2xl hover:bg-indigo-500/10 hover:border-indigo-500/30 transition-all text-indigo-300 group cursor-pointer ${isDownloading ? 'opacity-50 pointer-events-none' : ''}`}
                             >
                                 <span className="flex items-center gap-2 font-bold text-sm">
@@ -999,8 +1289,8 @@ const MvProductionTab: React.FC = () => {
                                 <Download className="w-4 h-4 opacity-50 group-hover:opacity-100 transition-opacity" />
                             </a>
                             <a
-                                href={state.result?.instrumental_url ? `http://localhost:8000${state.result.instrumental_url}` : '#'}
-                                onClick={(e) => state.result?.instrumental_url && handleDownloadFile(e, `http://localhost:8000${state.result.instrumental_url}`, 'instrumental.wav')}
+                                href={state.result?.instrumental_url ? `http://localhost:8100${state.result.instrumental_url}` : '#'}
+                                onClick={(e) => state.result?.instrumental_url && handleDownloadFile(e, `http://localhost:8100${state.result.instrumental_url}`, 'instrumental.wav')}
                                 className={`flex items-center justify-between p-4 bg-violet-500/5 border border-violet-500/10 rounded-2xl hover:bg-violet-500/10 hover:border-violet-500/30 transition-all text-violet-300 group cursor-pointer ${isDownloading ? 'opacity-50 pointer-events-none' : ''}`}
                             >
                                 <span className="flex items-center gap-2 font-bold text-sm">
@@ -1025,8 +1315,8 @@ const MvProductionTab: React.FC = () => {
                         </div>
                     )
                 }
-            </div >
-        </div >
+            </div>
+        </div>
     );
 };
 

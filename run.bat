@@ -21,8 +21,12 @@ echo Activate venv and installing requirements including soundfile...
 call server\venv\Scripts\activate.bat
 pip install -r server\requirements.txt
 
+echo Starting Local LLM Service (Port 8080)...
+start "Local LLM Service" "local_llm\start_lfm.bat"
+
 echo [4/4] Starting Suno Architect Suite (Unified Window)...
-echo Backend: http://localhost:8000
+echo Backend: http://localhost:8100
+echo ACESTEP: http://localhost:8101
 echo Frontend: http://localhost:3000
 echo.
 

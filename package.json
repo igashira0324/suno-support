@@ -7,9 +7,11 @@
         "dev": "vite",
         "build": "vite build",
         "preview": "vite preview",
-        "start:backend": "cd server && venv\\Scripts\\activate && python main.py",
+        "start:backend": "cd server && venv\\Scripts\\python.exe main.py",
+        "start:acestep": "cd ace-step && .venv\\Scripts\\activate && set ACESTEP_CONFIG_PATH=acestep-v15-turbo&& python -m acestep.api_server --port 8101 --init-llm --lm-model-path acestep-5Hz-lm-0.6B",
         "start:frontend": "vite",
-        "dev:all": "concurrently --kill-others --names \"BACKEND,FRONTEND\" --prefix-colors \"blue,green\" \"npm run start:backend\" \"npm run start:frontend\""
+        "dev:all": "concurrently --kill-others --names \"BACKEND,ACESTEP,FRONTEND\" --prefix-colors \"blue,magenta,green\" \"npm run start:backend\" \"npm run start:acestep\" \"npm run start:frontend\"",
+        "dev:app": "concurrently --kill-others --names \"BACKEND_API,FRONTEND\" --prefix-colors \"blue,green\" \"npm run start:backend\" \"npm run start:frontend\""
     },
     "dependencies": {
         "@google/genai": "^1.30.0",

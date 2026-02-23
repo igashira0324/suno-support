@@ -1,102 +1,122 @@
-# Suno Architect Suite (v4.5 Hybrid)
+# Suno Architect Suite (v4.6 Hybrid)
 
-Suno AI (v4.5) のポテンシャルを最大限に引き出すための統合開発環境です。
-Gemini 2.5 Flash / 3.0 Flash Preview などの最新AIモデルを活用し、プロンプト生成から歌詞生成、MV制作支援までをワンストップで行えます。
+Suno AI (v4.5/v5) のポテンシャルを最大限に引き出すための統合開発環境です。
+Gemini 1.5 Pro / 2.0 Flash / 3.1 Pro などの最新AIモデルを活用し、プロンプト生成から歌詞生成、MV制作支援までをワンストップで行えます。
+
+---
 
 ## ✨ 主な機能
 
 ### 1. Advanced Prompt Generation
-*   **Gemini 2.5 Flash / 3.0 Flash Preview Integration**: 最新の高精度・高速モデルを使用し、入力されたイメージから最適なSuno v4.5用プロンプトを生成します。
-*   **Search Engine Integration**: Google Grounding、Google Custom Search、または Tavily を使用し、最新の音楽トレンドやアーティスト情報を加味したプロンプト作成が可能です。
-*   **Suno URL Analysis**: 既存のSuno楽曲URLを入力すると、そのメタデータ（タイトル、プロンプト、スタイル）を解析し、それをベースに新しいプロンプトを作成できます。
-    *   **New!**: `/s/` 形式の短縮URLにも対応。
-    *   **New!**: メタデータが隠れている場合でも自動的にAPI等から情報を補完します。
+*   **Dual-Brain Intelligence**: Gemini 2.5 Flash Lite (Default) / 2.0 Flash / 3.1 Pro 等を切り替え可能。
+*   **Image-to-Prompt (New!)**: 参考画像から、音楽スタイルや雰囲気を読み取り、最適なプロンプトを生成。
+*   **Search Engine Grounding**: Google Custom Search, Tavily AI を活用し、最新トレンドやアーティスト情報をプロンプトに反映。
+*   **Suno URL Analysis**: `/s/` 短縮URLを含むSuno楽曲からメタデータを抽出し、そのスタイルを継承した新曲作成を支援。
 
-### 2. YuE: Lyrics & Music Generation Support
-*   (Experimental) 歌詞生成や楽曲構成案の作成をサポートします。
+### 2. MiniMax Music 2.5 Integration (Cloud Power)
+最新の **MiniMax Music 2.5** モデルを用いた高品質な楽曲生成に対応。
+*   **Music-2.5 Architecture**: より複雑な構成と高品質な音響特性を持つ楽曲を生成。
+*   **Editable Style & Lyrics**: Gemini が生成した案を手動で微調整してから生成可能。
+*   **Enhanced Stability**: タイムアウトを 600 秒に延長し、混雑時の安定性を確保。
+*   **Real-time Progress Timer**: 生成中の経過時間を秒単位で表示。
 
-### 3. MV Production Support (Powerful!)
-*   **High-Quality Audio Separation**: `audio-separator` (BS-RoFormer MDX23C-8KFFT-InstVoc_HQ model) を使用し、楽曲を「ボーカル」と「インスト（伴奏）」に極めて高精度に分離します。
-*   **Advanced Waveform Editor**:
-    *   **Multi-track Control**: オリジナル、ボーカル、インストを切り替えてプレビュー可能。再生位置を同期。
-    *   **Precise Range Selection**: マウス操作、現在の再生位置からの設定、または `MM:SS.ss` 形式での手動入力による精密な範囲指定。
-    *   **Loop Playback**: 全体のループ再生に加え、**選択範囲のみを繰り返す「Play Loop」機能**を搭載。
-    *   **Cancellation**: 処理の途中で「キャンセル」が可能になりました。
-*   **Smart Trimming & Download**: 指定した範囲のみを切り出して即座に `wav` ダウンロード。
+### 3. ACE-STEP v1.5 Integration (Local & Limitless)
+Suno AI 級の高品質な音楽生成を、**完全ローカル環境**で実現。
+*   **ADG (Audio Directed Generation) (New!)**: 参考音源（リファレンストラック）を指定し、そのスタイルや音響特性を保ったまま新しい曲を生成。
+*   **Multi-Stage Lyrics Pipeline (New!)**: 
+    1. **Direct Extract**: Suno APIから直接歌詞を取得。
+    2. **Smart Subtitles**: YouTube字幕（VTT形式）からクリーンな歌詞を抽出。
+    3. **AI Whisper ASR**: 音声認識により、音源から直接歌詞を書き起こし、AIで構成をタグ付け。
+*   **Creative Modes**: Text-to-Music / Cover (Style Transfer) / LoRA / Repaint.
+*   **Post-Gen Vocal Replacement (Enhanced with Seed-VC)**: 
+    - **Pro Tuning / 詳細設定**: Diffusion Steps, Pitch Shift, F0 Condition, Auto F0 Adjust などの精密な調整に対応。
+    - **Quality Pipeline**: Demucs 分離後、MDX-Net による二次精製（Refinement）を行う高品質ボーカルクリーンアップ。
+    - **Performance Metrics**: 変換にかかった全プロセス時間をリアルタイムに表示。
+*   **Smart Settings Advisor (Updated!)**:
+    - **Step Recommendation**: HQ制作には32ステップ以上を推奨。
+    - **Thinking Mode Guidance**: 5Hz LMによる音楽設計プロトコルの詳細ヘルプを追加。
+    - **Auto-Prompting**: Coverモード切り替え時に「Faithful cover, original melody...」を自動セット。
 
-### MV Production ワークフロー
+### 3. YuE: Advanced Generation (New Tab!)
+最先端の音楽生成モデル「YuE」による、より細かな制御が可能な生成モード。
+*   **Quality Profiles**: Best (8.0bpw) / Balanced / Fast 等、VRAM量に合わせた品質選択。
+*   **Language Optimization**: 日本語 (jp-kr-cot) と英語 (en-cot) 各言語に最適化されたCoT（思考の連鎖）生成に対応。
+*   **Structural Control**: セグメント数 (1〜4+) を指定し、30秒から2分以上のフル楽曲まで柔軟に作成。
+
+### 4. MV Production Support (Pro Suite)
+MV制作を加速させる、高度なオーディオ編集・解析ツール群。
+*   **Universal URL Import (New!)**: YouTube (Shorts含む), TikTok, Suno.ai, SoundCloud 等のURLから直接オーディオを抽出・分離。
+*   **Audio Separator (HQ)**: BS-RoFormer & MDX-Net 23C を使用し、ボーカルと伴奏を極限までクリーンに分離。
+*   **CLAP Semantic Search (New!)**: 自然言語（「ギターソロ」「激しいドラム」等）で音源内の特定区間を瞬時に検索・特定。
+*   **Audio Intelligence (New!)**: 波形解析により、BPM、キー、強度曲線（Intensity Curve）を自動検出。
+*   **Seed-VC Integration**: MV制作時に分離したボーカルトラックに対して、リファレンス音声を用いた任意の声質変換を適用可能。
+*   **Precision Waveform Editor**:
+    *   **MM:SS.ss 直接入力**: ミリ秒単位での精密なトリミング範囲指定。
+    *   **Dual-End Playback**: 選択範囲の開始点と終了点を個別に確認（Loop Playback搭載）。
+    *   **Cloud Transfer**: ローカル生成された音源を即座にクラウドストレージへ保存・同期。
+
+---
+
+## 🏗️ アーキテクチャ
+
 ```mermaid
-graph TD
-    A[オーディオファイルをアップロード] --> B{タスクのキューイング}
-    B --> C[BS-RoFormer による音源分離]
-    C -->|ユーザーがキャンセル| D[タスクを安全に中断]
-    C -->|処理成功| E[結果: ボーカル & インスト抽出]
-    E --> F[Waveform エディタを表示]
-    F --> G[トラック切替: オリジナル/ボーカル/インスト]
-    F --> H[範囲指定: ドラッグ & 手動入力]
-    H --> I[範囲アクション]
-    I --> J[Play Loop: 指定範囲の繰り返し再生]
-    I --> K[Download Segment: 指定範囲のトリミング保存]
-    F --> L[全体操作: ズーム, 音量, 全体ループ]
+graph TB
+    subgraph "Frontend"
+        A["AceStepTab (Generation)"]
+        B["MvProductionTab (Edit/AI Analysis)"]
+        C["YuEGenerationTab (Custom)"]
+    end
+
+    subgraph "Backend (FastAPI :8100)"
+        D["Generation Proxies"]
+        E["Lyrics AI Pipeline"]
+        F["Audio Analysis Engine"]
+    end
+
+    subgraph "Local Engines"
+        G["ACE-Step API (:8101)"]
+        H["AI Separation (MDX23/Demucs/Seed-VC)"]
+        I["Local LLM (:8080)"]
+    end
+
+    A <--> D <--> G
+    B <--> F <--> H
+    C <--> D
+    E <--> I
 ```
 
 ---
 
-## 🚀 セットアップと起動
+## 🚀 起動方法
 
-### 1. 前提条件
-*   Node.js (v18以上推奨)
-*   Python (3.10以上推奨)
-*   FFmpeg (パスが通っていること)
-*   **GPU環境 (推奨)**: NVIDIA GPU + CUDA 11.x/12.x
-
-### 2. インストール
-リポジトリをクローンまたはダウンロードし、フォルダ内で以下のコマンドを実行します。
-
-### 3. 環境変数の設定
-ルートディレクトリの `.env.local` に必要なAPIキーを設定してください。
-
-```env
-# Gemini API
-GEMINI_API_KEY=your_gemini_api_key
-
-# Google Search (Optional)
-GOOGLE_CUSTOM_SEARCH_API_KEY=your_google_api_key
-GOOGLE_CUSTOM_SEARCH_CX=your_google_cx
-
-# Tavily Search (Optional)
-TAVILY_API_KEY=your_tavily_api_key
-```
-
-## 起動方法
-
-```bash
+### 1. サーバー一括起動 (推奨)
+```powershell
 # Windows
 .\run.bat
 ```
+以下のコンポーネントが自動的に起動します：
+- **Master App**: http://localhost:5173
+- **FastAPI Backend**: http://localhost:8100
+- **ACE-Step Engine**: http://localhost:8101
 
-アプリケーションが起動すると：
-- **Backend (FastAPI)**: http://localhost:8000
-- **Frontend (Vite/React)**: http://localhost:5173 (または 3000)
+### 2. 個別起動
+- **フロントエンドのみ**: `npm run dev`
+- **バックエンドのみ**: `python server/main.py`
+- **ACE-Step APIのみ**: `.\run_acestep.bat`
 
-## 使用可能なAIモデル
+---
 
-| モデル名 | 説明 |
-|---------|------|
-| `gemini-2.5-flash` | 最新・安定版（推奨） |
-| `gemini-3.0-flash-preview` | 最先端のプレビュー版 |
+## 💡 使用可能なAIモデル
 
-## 検索エンジンについて
+| カテゴリ | モデル名 | 特徴 |
+|---------|---------|------|
+| **LLM (Planning)** | `gemini-2.5-flash-lite`, `gemini-2.0-flash` | 高速・高精度な楽曲設計 |
+| **Music (Cloud)** | `MiniMax Music 2.5` | 最新のクラウド生成モデル |
+| **Music (Local)** | `acestep-v15-base / turbo` | 柔軟なローカル生成、ADG対応 |
+| **Custom Music** | `YuE (Best/Balanced/Fast)` | 専門的な音源生成 |
+| **Analysis** | `CLAP`, `Whisper`, `RoFormer` | 音源解析・分離用 |
 
-| モード | 説明 | 必要なAPI Key |
-|-------|------|--------------|
-| Google Grounding (内蔵) | Gemini APIに内蔵された検索機能 | なし（Gemini API Keyのみ） |
-| Google Custom Search | Google Programmable Search Engine | `GOOGLE_CUSTOM_SEARCH_API_KEY`, `GOOGLE_CUSTOM_SEARCH_CX` |
-| Tavily AI Search | Tavily社のAI検索サービス | `TAVILY_API_KEY` |
-| OFF (節約) | 検索機能を無効化（API使用量節約） | なし |
+---
 
-> **💡 ヒント**: oEmbed対応URL（YouTube, Spotify, Suno等）を入力すると、楽曲情報を自動的に解析します。
-
-## ライセンス
-
-MIT License
+## 📝 ライセンス
+MIT License - Developed for the Suno AI Community.

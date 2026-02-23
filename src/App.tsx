@@ -4,11 +4,12 @@ import { generateSunoPrompt } from './services/geminiService';
 import InputSection from './components/InputSection';
 import ResultSection from './components/ResultSection';
 import YuEGenerationTab from './components/YuEGenerationTab';
+import AceStepTab from './components/AceStepTab';
 import MvProductionTab from './components/MvProductionTab';
 import { AudioWaveform as Waveform, Sparkles, AlertCircle, Wand2, Music, Settings, Info, Video } from 'lucide-react';
 
 const App: React.FC = () => {
-    const [activeTab, setActiveTab] = useState<'prompt' | 'yue' | 'mv'>('prompt');
+    const [activeTab, setActiveTab] = useState<'prompt' | 'yue' | 'ace' | 'mv'>('prompt');
     const [state, setState] = useState<AppState>({
         inputText: '',
         youtubeUrl: '',
@@ -19,7 +20,7 @@ const App: React.FC = () => {
         result: null,
         error: null,
         searchEngine: 'google-grounding',
-        modelName: 'gemini-3-flash-preview',
+        modelName: 'gemini-2.5-flash-lite',
         enableVideoAnalysis: false,
     });
 
@@ -93,6 +94,63 @@ const App: React.FC = () => {
         }
     };
 
+    const handleMinimaxGenerate = async (title: string, style: string, content: string, index: number) => {
+        if (!state.result || !state.result.generatedSelections) return;
+
+        // Update state to show loading for specific card
+        const updatedSelections = [...state.result.generatedSelections];
+        updatedSelections[index] = {
+            ...updatedSelections[index],
+            isMinimaxGenerating: true,
+            minimaxError: null
+        };
+        setState(prev => ({
+            ...prev,
+            result: prev.result ? { ...prev.result, generatedSelections: updatedSelections } : null
+        }));
+
+        try {
+            const response = await fetch('http://localhost:8100/acestep/minimax/generate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ lyrics: content, prompt: style })
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.detail || 'MiniMax生成に失敗しました。');
+            }
+
+            // Update state with result
+            const finalSelections = [...(state.result?.generatedSelections || [])];
+            finalSelections[index] = {
+                ...finalSelections[index],
+                isMinimaxGenerating: false,
+                minimaxAudioUrl: `http://localhost:8100${data.audio_url}`,
+                minimaxError: null
+            };
+
+            setState(prev => ({
+                ...prev,
+                result: prev.result ? { ...prev.result, generatedSelections: finalSelections } : null
+            }));
+
+        } catch (error: any) {
+            console.error("MiniMax Error:", error);
+            const errorSelections = [...(state.result?.generatedSelections || [])];
+            errorSelections[index] = {
+                ...errorSelections[index],
+                isMinimaxGenerating: false,
+                minimaxError: error.message
+            };
+            setState(prev => ({
+                ...prev,
+                result: prev.result ? { ...prev.result, generatedSelections: errorSelections } : null
+            }));
+        }
+    };
+
     return (
         <div className="min-h-screen flex flex-col bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-950 via-slate-950 to-black text-slate-200">
 
@@ -131,6 +189,16 @@ const App: React.FC = () => {
                             YuE Generate
                         </button>
                         <button
+                            onClick={() => setActiveTab('ace')}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'ace'
+                                ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20'
+                                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                                }`}
+                        >
+                            <Sparkles className="w-4 h-4" />
+                            ACE-Step 1.5
+                        </button>
+                        <button
                             onClick={() => setActiveTab('mv')}
                             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'mv'
                                 ? 'bg-rose-600 text-white shadow-lg shadow-rose-500/20'
@@ -150,42 +218,53 @@ const App: React.FC = () => {
 
             {/* Main Content */}
             <main className="flex-grow w-full max-w-7xl mx-auto px-4 py-8 overflow-hidden flex flex-col">
-                {activeTab === 'prompt' ? (
-                    <div className="space-y-12 overflow-y-auto custom-scrollbar pr-2">
-                        <InputSection
-                            inputText={state.inputText}
-                            youtubeUrl={state.youtubeUrl}
-                            onTextChange={handleTextChange}
-                            onUrlChange={handleUrlChange}
-                            onFileSelect={handleFileSelect}
-                            onSubmit={handleSubmit}
-                            isLoading={state.isLoading}
-                            mediaType={state.mediaType}
-                            mediaFile={state.mediaFile}
-                            generationMode={state.generationMode}
-                            onModeChange={handleModeChange}
-                            searchEngine={state.searchEngine}
-                            onSearchEngineChange={handleSearchEngineChange}
-                            modelName={state.modelName}
-                            onModelChange={handleModelChange}
-                            enableVideoAnalysis={state.enableVideoAnalysis}
-                            onVideoAnalysisToggle={handleVideoAnalysisToggle}
+                <div style={{ display: activeTab === 'prompt' ? 'block' : 'none' }}
+                    className="space-y-12 overflow-y-auto custom-scrollbar pr-2">
+                    <InputSection
+                        inputText={state.inputText}
+                        youtubeUrl={state.youtubeUrl}
+                        onTextChange={handleTextChange}
+                        onUrlChange={handleUrlChange}
+                        onFileSelect={handleFileSelect}
+                        onSubmit={handleSubmit}
+                        isLoading={state.isLoading}
+                        mediaType={state.mediaType}
+                        mediaFile={state.mediaFile}
+                        generationMode={state.generationMode}
+                        onModeChange={handleModeChange}
+                        searchEngine={state.searchEngine}
+                        onSearchEngineChange={handleSearchEngineChange}
+                        modelName={state.modelName}
+                        onModelChange={handleModelChange}
+                        enableVideoAnalysis={state.enableVideoAnalysis}
+                        onVideoAnalysisToggle={handleVideoAnalysisToggle}
+                    />
+
+                    {state.error && (
+                        <div className="max-w-2xl mx-auto p-4 bg-red-950/40 border border-red-500/40 rounded-xl text-red-200 flex items-start gap-3 shadow-lg">
+                            <AlertCircle className="w-6 h-6 text-red-400 shrink-0 mt-0.5" />
+                            <div><h3 className="font-bold text-red-300 mb-1">生成エラー</h3><p className="text-sm text-red-200/80">{state.error}</p></div>
+                        </div>
+                    )}
+
+                    {state.result && (
+                        <ResultSection
+                            data={state.result}
+                            onTitleSelect={handleTitleSelect}
+                            isGeneratingPhase2={isGeneratingPhase2}
+                            onMinimaxGenerate={handleMinimaxGenerate}
                         />
-
-                        {state.error && (
-                            <div className="max-w-2xl mx-auto p-4 bg-red-950/40 border border-red-500/40 rounded-xl text-red-200 flex items-start gap-3 shadow-lg">
-                                <AlertCircle className="w-6 h-6 text-red-400 shrink-0 mt-0.5" />
-                                <div><h3 className="font-bold text-red-300 mb-1">生成エラー</h3><p className="text-sm text-red-200/80">{state.error}</p></div>
-                            </div>
-                        )}
-
-                        {state.result && <ResultSection data={state.result} onTitleSelect={handleTitleSelect} isGeneratingPhase2={isGeneratingPhase2} />}
-                    </div>
-                ) : activeTab === 'yue' ? (
+                    )}
+                </div>
+                <div style={{ display: activeTab === 'yue' ? 'block' : 'none' }}>
                     <YuEGenerationTab />
-                ) : (
+                </div>
+                <div style={{ display: activeTab === 'ace' ? 'block' : 'none' }}>
+                    <AceStepTab />
+                </div>
+                <div style={{ display: activeTab === 'mv' ? 'block' : 'none' }}>
                     <MvProductionTab />
-                )}
+                </div>
             </main>
 
             {/* Footer */}

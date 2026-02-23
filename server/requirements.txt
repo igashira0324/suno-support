@@ -13,3 +13,6 @@ requests
 beautifulsoup4
 audio-separator[gpu]
 soundfile
+yt-dlp
+pedalboard
+matchering

@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ACE-STEP モデル選択 & カバー機能ガイド</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap');
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+            min-height: 100vh;
+            padding: 2rem;
+        }
+
+        .container {
+            max-width: 960px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            font-size: 2rem;
+            font-weight: 900;
+            background: linear-gradient(135deg, #818cf8, #ec4899);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0.5rem;
+        }
+
+        .subtitle {
+            font-size: 0.85rem;
+            color: #94a3b8;
+            margin-bottom: 2rem;
+        }
+
+        .card {
+            background: #1e293b;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .card h2 {
+            font-size: 1.2rem;
+            font-weight: 800;
+            color: #e2e8f0;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .card h2 .badge {
+            font-size: 0.65rem;
+            padding: 3px 8px;
+            border-radius: 999px;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+
+        .badge-blue {
+            background: rgba(99, 102, 241, 0.15);
+            color: #818cf8;
+            border: 1px solid rgba(99, 102, 241, 0.3);
+        }
+
+        .badge-pink {
+            background: rgba(236, 72, 153, 0.15);
+            color: #ec4899;
+            border: 1px solid rgba(236, 72, 153, 0.3);
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+
+        .feature-box {
+            background: #0f172a;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 0.75rem;
+            padding: 1rem;
+        }
+
+        .feature-box h3 {
+            font-size: 0.8rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 0.5rem;
+        }
+
+        .turbo-color {
+            color: #34d399;
+        }
+
+        .base-color {
+            color: #818cf8;
+        }
+
+        .feature-box p {
+            font-size: 0.8rem;
+            color: #94a3b8;
+            line-height: 1.6;
+        }
+
+        .feature-box .steps {
+            font-family: monospace;
+            font-size: 1.5rem;
+            font-weight: 900;
+            margin: 0.5rem 0;
+        }
+
+        .steps.turbo {
+            color: #34d399;
+        }
+
+        .steps.base {
+            color: #818cf8;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1rem 0;
+            font-size: 0.8rem;
+        }
+
+        th,
+        td {
+            padding: 0.75rem;
+            text-align: left;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        th {
+            font-weight: 800;
+            color: #94a3b8;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-size: 0.7rem;
+        }
+
+        td {
+            color: #cbd5e1;
+        }
+
+        .highlight {
+            color: #818cf8;
+            font-weight: 700;
+        }
+
+        .mermaid-container {
+            background: #0f172a;
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            margin: 1rem 0;
+            text-align: center;
+        }
+
+        .flow-diagram {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+            padding: 1rem 0;
+        }
+
+        .flow-step {
+            background: linear-gradient(135deg, #1e293b, #334155);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 0.75rem;
+            padding: 0.75rem 1.25rem;
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-align: center;
+            min-width: 120px;
+            transition: transform 0.2s;
+        }
+
+        .flow-step:hover {
+            transform: scale(1.05);
+        }
+
+        .flow-step.active {
+            border-color: rgba(236, 72, 153, 0.5);
+            background: linear-gradient(135deg, rgba(236, 72, 153, 0.1), rgba(168, 85, 247, 0.1));
+        }
+
+        .flow-arrow {
+            color: #475569;
+            font-size: 1.2rem;
+            font-weight: 900;
+        }
+
+        .slider-demo {
+            background: #0f172a;
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            margin: 1rem 0;
+        }
+
+        .slider-track {
+            height: 8px;
+            background: #1e293b;
+            border-radius: 4px;
+            position: relative;
+            margin: 1rem 0;
+        }
+
+        .slider-fill {
+            height: 100%;
+            border-radius: 4px;
+            background: linear-gradient(90deg, #818cf8, #ec4899);
+            width: 80%;
+            transition: width 0.3s;
+        }
+
+        .slider-labels {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.7rem;
+            color: #64748b;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        .cover-value {
+            text-align: center;
+            font-size: 2rem;
+            font-weight: 900;
+            color: #ec4899;
+            margin: 0.5rem 0;
+        }
+
+        .file-list {
+            margin: 1rem 0;
+        }
+
+        .file-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 0.75rem;
+            background: #0f172a;
+            border-radius: 0.5rem;
+            margin: 0.5rem 0;
+            font-size: 0.75rem;
+        }
+
+        .file-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+
+        .dot-ts {
+            background: #3b82f6;
+        }
+
+        .dot-tsx {
+            background: #818cf8;
+        }
+
+        .dot-py {
+            background: #34d399;
+        }
+
+        .file-name {
+            font-weight: 700;
+            color: #e2e8f0;
+        }
+
+        .file-desc {
+            color: #64748b;
+            margin-left: auto;
+            font-size: 0.7rem;
+        }
+
+        /* Animation */
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .card {
+            animation: slideIn 0.5s ease-out both;
+        }
+
+        .card:nth-child(2) {
+            animation-delay: 0.1s;
+        }
+
+        .card:nth-child(3) {
+            animation-delay: 0.2s;
+        }
+
+        .card:nth-child(4) {
+            animation-delay: 0.3s;
+        }
+
+        .card:nth-child(5) {
+            animation-delay: 0.4s;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
+        }
+
+        .pulse {
+            animation: pulse 2s ease-in-out infinite;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>🎵 ACE-STEP v1.5 拡張ガイド</h1>
+        <p class="subtitle">モデル選択の自動最適化 & Cover（アレンジ）機能の統合</p>
+
+        <!-- Feature 1: Model Selection -->
+        <div class="card">
+            <h2><span class="badge badge-blue">Feature 1</span> モデル選択 & ステップ数自動連動</h2>
+            <p style="font-size: 0.85rem; color: #94a3b8; margin-bottom: 1rem;">モデルを切り替えると、推奨ステップ数が自動的に最適値に設定されます。</p>
+            <div class="feature-grid">
+                <div class="feature-box">
+                    <h3 class="turbo-color">⚡ Turbo（高速）</h3>
+                    <div class="steps turbo">8 steps</div>
+                    <p>蒸留技術により少数ステップで完成。<br>デモや試行錯誤に最適。<br>スライダー上限: <strong>20</strong></p>
+                </div>
+                <div class="feature-box">
+                    <h3 class="base-color">💎 Base（高品質）</h3>
+                    <div class="steps base">32 steps</div>
+                    <p>じっくり高品質に生成。<br>本番制作に最適。<br>スライダー上限: <strong>100</strong></p>
+                </div>
+            </div>
+            <table>
+                <tr>
+                    <th>項目</th>
+                    <th>Turbo</th>
+                    <th>Base</th>
+                </tr>
+                <tr>
+                    <td>デフォルトステップ</td>
+                    <td class="highlight">8</td>
+                    <td class="highlight">32</td>
+                </tr>
+                <tr>
+                    <td>スライダー最大</td>
+                    <td>20</td>
+                    <td>100</td>
+                </tr>
+                <tr>
+                    <td>生成速度</td>
+                    <td>⚡ 高速</td>
+                    <td>🐢 低速</td>
+                </tr>
+                <tr>
+                    <td>推奨用途</td>
+                    <td>プロトタイプ・デモ</td>
+                    <td>本番・最終出力</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- Feature 2: Cover Mode -->
+        <div class="card">
+            <h2><span class="badge badge-pink">Feature 2</span> Cover（アレンジ）モード</h2>
+            <p style="font-size: 0.85rem; color: #94a3b8; margin-bottom: 1rem;">既存楽曲をベースにスタイル変換（カバー）する新機能。トグル切替で
+                Text-to-Music / Cover を選択。</p>
+
+            <div class="flow-diagram">
+                <div class="flow-step active">🎵 音源アップロード</div>
+                <div class="flow-arrow">→</div>
+                <div class="flow-step active">🎚️ 強度設定</div>
+                <div class="flow-arrow">→</div>
+                <div class="flow-step active">📝 プロンプト入力</div>
+                <div class="flow-arrow">→</div>
+                <div class="flow-step active">🎶 カバー生成</div>
+            </div>
+
+            <h3 style="font-size: 0.9rem; font-weight: 800; margin: 1.5rem 0 0.5rem;">Cover Strength（アレンジ強度）</h3>
+            <div class="slider-demo">
+                <div class="cover-value pulse">0.8</div>
+                <div class="slider-track">
+                    <div class="slider-fill"></div>
+                </div>
+                <div class="slider-labels">
+                    <span>0.0 — 自由（プロンプト重視）</span>
+                    <span>1.0 — 忠実（元曲重視）</span>
+                </div>
+            </div>
+
+            <table>
+                <tr>
+                    <th>強度</th>
+                    <th>効果</th>
+                    <th>使用例</th>
+                </tr>
+                <tr>
+                    <td><span class="highlight">0.2 ~ 0.5</span></td>
+                    <td>元曲を「ヒント」程度に使用</td>
+                    <td>雰囲気だけ借りたい場合</td>
+                </tr>
+                <tr>
+                    <td><span class="highlight">0.6 ~ 0.8</span> ★推奨</td>
+                    <td>メロディを保持しつつ新スタイルに</td>
+                    <td>ジャンル変換（ポップ→ジャズ）</td>
+                </tr>
+                <tr>
+                    <td><span class="highlight">0.9 ~ 1.0</span></td>
+                    <td>原曲のメロディを厳密に再現</td>
+                    <td>忠実なカバー版の作成</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- Modified Files -->
+        <div class="card">
+            <h2>📁 変更ファイル一覧</h2>
+            <div class="file-list">
+                <div class="file-item">
+                    <div class="file-dot dot-ts"></div>
+                    <span class="file-name">types.ts</span>
+                    <span class="file-desc">task_type, coverAudioFile, audio_cover_strength 追加</span>
+                </div>
+                <div class="file-item">
+                    <div class="file-dot dot-tsx"></div>
+                    <span class="file-name">AceStepTab.tsx</span>
+                    <span class="file-desc">モデル連動 + Cover UI + ファイルアップローダー + 強度スライダー</span>
+                </div>
+                <div class="file-item">
+                    <div class="file-dot dot-py"></div>
+                    <span class="file-name">main.py</span>
+                    <span class="file-desc">upload-source エンドポイント + 新パラメータ対応</span>
+                </div>
+                <div class="file-item">
+                    <div class="file-dot dot-py"></div>
+                    <span class="file-name">acestep_service.py</span>
+                    <span class="file-desc">Cover パラメータの API 転送</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Architecture Diagram -->
+        <div class="card">
+            <h2>🔧 処理フロー（UML シーケンス図）</h2>
+            <div class="mermaid-container">
+                <pre style="text-align: left; font-size: 0.7rem; color: #94a3b8; line-height: 1.8;">
+┌──────────┐     ┌──────────────┐     ┌───────────────┐     ┌──────────────┐
+│ Frontend │     │  main.py     │     │ acestep_svc   │     │ ACE-STEP API │
+│ (React)  │     │  :8100       │     │               │     │  :8101       │
+└────┬─────┘     └──────┬───────┘     └───────┬───────┘     └──────┬───────┘
+     │                  │                     │                    │
+     │ ─── [Cover Mode] ────────────────────────────────────────── │
+     │                  │                     │                    │
+     │  POST /upload    │                     │                    │
+     │  (audio file)    │                     │                    │
+     │ ────────────────>│                     │                    │
+     │  { path: "..." } │                     │                    │
+     │ <────────────────│                     │                    │
+     │                  │                     │                    │
+     │  POST /generate  │                     │                    │
+     │  task_type:cover │                     │                    │
+     │  src_audio_path  │                     │                    │
+     │  cover_strength  │                     │                    │
+     │ ────────────────>│ release_task()      │                    │
+     │                  │ ───────────────────>│ POST /release_task │
+     │                  │                     │ ──────────────────>│
+     │                  │                     │   { task_id }      │
+     │                  │                     │ <──────────────────│
+     │  { task_id }     │                     │                    │
+     │ <────────────────│                     │                    │
+     │                  │                     │                    │
+     │  GET /status     │ query_result()      │ POST /query_result │
+     │ ────────────────>│ ───────────────────>│ ──────────────────>│
+     │ (polling)        │                     │  { result, audio } │
+     │ <────────────────│ <───────────────────│ <──────────────────│
+     │                  │                     │                    │
+                </pre>
+            </div>
+        </div>
+
+        <div class="card" style="text-align: center; border-color: rgba(99,102,241,0.2);">
+            <p style="font-size: 0.8rem; color: #64748b;">✅ TypeScript ビルド確認済み（npx tsc --noEmit エラーなし）</p>
+        </div>
+    </div>
+</body>
+
+</html>

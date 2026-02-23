@@ -42,5 +42,31 @@ yarn-error.log*
 uploads/
 outputs/
 
+# Local Engines and models
+local_llm/
+ace-step/
+seed-vc/
+
+# Large binaries and executables
+*.exe
+*.dll
+*.so
+*.dylib
+*.gguf
+*.bin
+*.pt
+*.pth
+*.ckpt
+*.onnx
+*.weights
+
 # Audio separator models cache
 audio-separator/
+
+# Agent metadata
+.agent/
+.gemini/
+
+# Temporary files
+ytdlp_out.txt
+tsc_error.log

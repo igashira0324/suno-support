@@ -33,6 +33,11 @@ def get_clap_model():
         _clap_model.load_ckpt()  # Downloads model if not cached
         logger.info("CLAP model loaded successfully")
         return _clap_model
+    except ImportError as e:
+        logger.error(f"CLAP module not installed or CUDA error: {e}")
+        logger.error("Please ensure PyTorch with CUDA is properly installed, then run: pip install laion-clap")
+        _model_loading = False
+        return None
     except Exception as e:
         logger.error(f"Failed to load CLAP model: {e}")
         _model_loading = False

@@ -1,0 +1,928 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Technical Blueprint — Suno Architect Suite</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link
+        href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Inter:wght@400;600;700;800&family=Noto+Sans+JP:wght@400;700&display=swap"
+        rel="stylesheet">
+    <style>
+        /* === RESET === */
+        *,
+        *::before,
+        *::after {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box
+        }
+
+        :root {
+            --c-bg: #08080e;
+            --c-surface: #0d0d15;
+            --c-card: #11111b;
+            --c-border: rgba(255, 255, 255, .06);
+            --c-text: #e2e8f0;
+            --c-dim: #64748b;
+            --c-primary: #818cf8;
+            --c-green: #34d399;
+            --c-amber: #fbbf24;
+            --c-red: #f87171;
+            --c-cyan: #22d3ee;
+            --c-glow: rgba(129, 140, 248, .15);
+            --radius: 1rem;
+            --mono: 'JetBrains Mono', monospace;
+            --sans: 'Inter', 'Noto Sans JP', system-ui, sans-serif;
+        }
+
+        html {
+            scroll-behavior: smooth
+        }
+
+        body {
+            font-family: var(--sans);
+            background: var(--c-bg);
+            color: var(--c-text);
+            line-height: 1.7;
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased
+        }
+
+        /* Grid bg */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            z-index: -1;
+            pointer-events: none;
+            background-image:
+                linear-gradient(rgba(129, 140, 248, .03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(129, 140, 248, .03) 1px, transparent 1px);
+            background-size: 50px 50px
+        }
+
+        /* Ambient */
+        .ambient {
+            position: fixed;
+            inset: 0;
+            z-index: -2;
+            overflow: hidden;
+            pointer-events: none
+        }
+
+        .ambient .orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(140px)
+        }
+
+        .orb-a {
+            width: 40vmax;
+            height: 40vmax;
+            top: -10%;
+            left: -10%;
+            background: var(--c-glow);
+            animation: drift 30s ease-in-out infinite alternate
+        }
+
+        .orb-b {
+            width: 35vmax;
+            height: 35vmax;
+            bottom: 0;
+            right: -5%;
+            background: rgba(34, 211, 238, .06);
+            animation: drift 25s ease-in-out infinite alternate-reverse
+        }
+
+        @keyframes drift {
+            0% {
+                transform: translate(0, 0)
+            }
+
+            100% {
+                transform: translate(30px, 20px)
+            }
+        }
+
+        /* === NAV === */
+        nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            backdrop-filter: blur(20px) saturate(1.5);
+            background: rgba(8, 8, 14, .7);
+            border-bottom: 1px solid var(--c-border)
+        }
+
+        nav .back {
+            display: inline-flex;
+            align-items: center;
+            gap: .5rem;
+            color: var(--c-dim);
+            text-decoration: none;
+            font-size: .85rem;
+            font-weight: 500;
+            transition: color .3s
+        }
+
+        nav .back:hover {
+            color: var(--c-text)
+        }
+
+        .nav-status {
+            display: flex;
+            align-items: center;
+            gap: .5rem;
+            font-family: var(--mono);
+            font-size: .75rem;
+            color: var(--c-green)
+        }
+
+        .nav-status .dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: var(--c-green);
+            animation: blink-dot 2s infinite
+        }
+
+        @keyframes blink-dot {
+
+            0%,
+            100% {
+                opacity: 1
+            }
+
+            50% {
+                opacity: .3
+            }
+        }
+
+        /* === HEADER === */
+        .page-header {
+            padding: 8rem 2rem 4rem;
+            max-width: 1000px;
+            margin: 0 auto
+        }
+
+        .page-header .tag {
+            font-family: var(--mono);
+            font-size: .75rem;
+            color: var(--c-primary);
+            letter-spacing: .1em;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: .5rem;
+            opacity: .7
+        }
+
+        .page-header h1 {
+            font-size: clamp(2.2rem, 5vw, 3.5rem);
+            font-weight: 800;
+            letter-spacing: -.03em;
+            margin-bottom: 1rem;
+            background: linear-gradient(135deg, #fff 0%, var(--c-primary) 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent
+        }
+
+        .page-header .desc {
+            font-size: 1.05rem;
+            color: var(--c-dim);
+            max-width: 600px;
+            font-weight: 400
+        }
+
+        /* === SECTIONS === */
+        .tech-section {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 0 2rem 5rem
+        }
+
+        .sec-label {
+            font-family: var(--mono);
+            font-size: .7rem;
+            color: var(--c-primary);
+            letter-spacing: .12em;
+            text-transform: uppercase;
+            margin-bottom: .5rem;
+            display: flex;
+            align-items: center;
+            gap: .6rem
+        }
+
+        .sec-label .line {
+            flex: 0 0 2rem;
+            height: 1px;
+            background: var(--c-primary);
+            opacity: .4
+        }
+
+        .sec-title {
+            font-size: 1.8rem;
+            font-weight: 800;
+            letter-spacing: -.02em;
+            margin-bottom: .8rem
+        }
+
+        .sec-desc {
+            color: var(--c-dim);
+            font-size: .95rem;
+            margin-bottom: 2rem;
+            max-width: 600px
+        }
+
+        /* === ARCHITECTURE DIAGRAM === */
+        .arch-diagram {
+            background: var(--c-card);
+            border: 1px solid var(--c-border);
+            border-radius: calc(var(--radius)*1.5);
+            padding: 2.5rem;
+            overflow: hidden;
+            position: relative
+        }
+
+        .arch-diagram::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--c-primary), transparent)
+        }
+
+        .arch-flow {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 0;
+            flex-wrap: wrap;
+            margin-bottom: 1.5rem
+        }
+
+        .arch-node {
+            background: rgba(129, 140, 248, .04);
+            border: 1px solid rgba(129, 140, 248, .15);
+            border-radius: var(--radius);
+            padding: 1.5rem 2rem;
+            text-align: center;
+            min-width: 180px;
+            transition: all .3s;
+            position: relative
+        }
+
+        .arch-node:hover {
+            border-color: rgba(129, 140, 248, .35);
+            transform: translateY(-3px);
+            box-shadow: 0 8px 30px rgba(129, 140, 248, .08)
+        }
+
+        .arch-node .name {
+            font-weight: 700;
+            font-size: 1rem;
+            margin-bottom: .3rem
+        }
+
+        .arch-node .tech {
+            font-family: var(--mono);
+            font-size: .75rem;
+            color: var(--c-dim)
+        }
+
+        .arch-arrow {
+            display: flex;
+            align-items: center;
+            padding: 0 .8rem;
+            font-size: 1.3rem;
+            color: var(--c-primary);
+            opacity: .5;
+            font-family: var(--mono)
+        }
+
+        .arch-note {
+            text-align: center;
+            font-family: var(--mono);
+            font-size: .75rem;
+            color: var(--c-dim);
+            padding-top: 1rem;
+            border-top: 1px solid var(--c-border)
+        }
+
+        /* === CODE BLOCK === */
+        .code-block {
+            background: #000;
+            border: 1px solid var(--c-border);
+            border-radius: var(--radius);
+            overflow: hidden;
+            margin-bottom: 2rem
+        }
+
+        .code-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: .75rem 1.2rem;
+            background: rgba(255, 255, 255, .03);
+            border-bottom: 1px solid var(--c-border)
+        }
+
+        .code-header .dots {
+            display: flex;
+            gap: 6px
+        }
+
+        .code-header .dots span {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%
+        }
+
+        .code-header .dots span:nth-child(1) {
+            background: #ff5f57
+        }
+
+        .code-header .dots span:nth-child(2) {
+            background: #febc2e
+        }
+
+        .code-header .dots span:nth-child(3) {
+            background: #28c840
+        }
+
+        .code-header .lang {
+            font-family: var(--mono);
+            font-size: .7rem;
+            color: var(--c-dim)
+        }
+
+        .code-body {
+            padding: 1.5rem;
+            font-family: var(--mono);
+            font-size: .82rem;
+            line-height: 1.8;
+            overflow-x: auto;
+            color: #a0aec0
+        }
+
+        .code-body .k {
+            color: var(--c-red)
+        }
+
+        .code-body .s {
+            color: var(--c-primary)
+        }
+
+        .code-body .c {
+            color: var(--c-dim);
+            font-style: italic
+        }
+
+        .code-body .n {
+            color: var(--c-green)
+        }
+
+        /* === ENGINE CARDS === */
+        .engine-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+            margin-bottom: 2rem
+        }
+
+        @media(max-width:768px) {
+            .engine-grid {
+                grid-template-columns: 1fr
+            }
+        }
+
+        .engine-card {
+            background: var(--c-card);
+            border: 1px solid var(--c-border);
+            border-radius: calc(var(--radius)*1.2);
+            padding: 2rem;
+            position: relative;
+            overflow: hidden;
+            transition: all .3s
+        }
+
+        .engine-card:hover {
+            transform: translateY(-3px);
+            border-color: rgba(255, 255, 255, .1)
+        }
+
+        .engine-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px
+        }
+
+        .engine-card:nth-child(1)::before {
+            background: linear-gradient(90deg, var(--c-amber), var(--c-red))
+        }
+
+        .engine-card:nth-child(2)::before {
+            background: linear-gradient(90deg, var(--c-green), var(--c-cyan))
+        }
+
+        .engine-card .card-header {
+            display: flex;
+            align-items: center;
+            gap: .8rem;
+            margin-bottom: 1.2rem
+        }
+
+        .engine-card .card-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.3rem
+        }
+
+        .engine-card:nth-child(1) .card-icon {
+            background: rgba(251, 191, 36, .1)
+        }
+
+        .engine-card:nth-child(2) .card-icon {
+            background: rgba(52, 211, 153, .1)
+        }
+
+        .engine-card .card-title {
+            font-weight: 700;
+            font-size: 1.05rem
+        }
+
+        .engine-card .card-subtitle {
+            font-family: var(--mono);
+            font-size: .72rem;
+            color: var(--c-dim)
+        }
+
+        .spec-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: .6rem
+        }
+
+        .spec-list li {
+            display: flex;
+            align-items: flex-start;
+            gap: .6rem;
+            font-size: .88rem;
+            color: var(--c-dim)
+        }
+
+        .spec-list li .icon {
+            color: var(--c-primary);
+            font-size: .7rem;
+            margin-top: .4rem;
+            flex-shrink: 0
+        }
+
+        /* Connector */
+        .engine-connector {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: .8rem;
+            margin-bottom: 2rem;
+            font-family: var(--mono);
+            font-size: .8rem;
+            color: var(--c-dim)
+        }
+
+        .engine-connector .line {
+            flex: 1;
+            max-width: 100px;
+            height: 1px;
+            background: var(--c-border)
+        }
+
+        /* === VRAM TABLE === */
+        .vram-table-wrapper {
+            background: var(--c-card);
+            border: 1px solid var(--c-border);
+            border-radius: calc(var(--radius)*1.2);
+            overflow: hidden
+        }
+
+        .vram-table-wrapper::before {
+            content: '';
+            display: block;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--c-primary), transparent)
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: .88rem
+        }
+
+        thead {
+            background: rgba(129, 140, 248, .04)
+        }
+
+        th {
+            padding: 1rem 1.2rem;
+            text-align: left;
+            font-family: var(--mono);
+            font-size: .75rem;
+            color: var(--c-primary);
+            text-transform: uppercase;
+            letter-spacing: .08em;
+            font-weight: 600;
+            border-bottom: 1px solid var(--c-border)
+        }
+
+        td {
+            padding: 1rem 1.2rem;
+            border-bottom: 1px solid var(--c-border);
+            color: var(--c-dim)
+        }
+
+        tr:last-child td {
+            border-bottom: none
+        }
+
+        tr:hover td {
+            background: rgba(255, 255, 255, .02);
+            color: var(--c-text)
+        }
+
+        .gpu-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: .4rem;
+            padding: .25rem .7rem;
+            border-radius: 6px;
+            font-family: var(--mono);
+            font-size: .8rem;
+            font-weight: 600;
+            color: var(--c-text)
+        }
+
+        .gpu-4 {
+            background: rgba(251, 191, 36, .1);
+            border: 1px solid rgba(251, 191, 36, .15)
+        }
+
+        .gpu-8 {
+            background: rgba(129, 140, 248, .1);
+            border: 1px solid rgba(129, 140, 248, .15)
+        }
+
+        .gpu-12 {
+            background: rgba(52, 211, 153, .1);
+            border: 1px solid rgba(52, 211, 153, .15)
+        }
+
+        .gpu-24 {
+            background: rgba(34, 211, 238, .1);
+            border: 1px solid rgba(34, 211, 238, .15)
+        }
+
+        .unlimited {
+            color: var(--c-green);
+            font-weight: 600
+        }
+
+        /* === CTA / NAV BACK === */
+        .bottom-nav {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 0 2rem 4rem;
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap
+        }
+
+        .bottom-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: .5rem;
+            padding: .9rem 2rem;
+            border-radius: var(--radius);
+            font-size: .9rem;
+            font-weight: 600;
+            text-decoration: none;
+            border: 1px solid var(--c-border);
+            color: var(--c-text);
+            background: var(--c-card);
+            transition: all .3s
+        }
+
+        .bottom-btn:hover {
+            border-color: var(--c-primary);
+            box-shadow: 0 0 25px var(--c-glow);
+            transform: translateY(-2px)
+        }
+
+        .bottom-btn.primary {
+            background: linear-gradient(135deg, var(--c-primary), #6366f1);
+            border-color: transparent;
+            color: #fff
+        }
+
+        /* === FOOTER === */
+        footer {
+            padding: 2.5rem 2rem;
+            text-align: center;
+            border-top: 1px solid var(--c-border);
+            font-family: var(--mono);
+            font-size: .72rem;
+            color: var(--c-dim)
+        }
+
+        /* === ANIMATIONS === */
+        .reveal {
+            opacity: 0;
+            transform: translateY(25px);
+            transition: opacity .7s ease, transform .7s ease
+        }
+
+        .reveal.visible {
+            opacity: 1;
+            transform: translateY(0)
+        }
+
+        .reveal-d1 {
+            transition-delay: .1s
+        }
+
+        .reveal-d2 {
+            transition-delay: .2s
+        }
+
+        .reveal-d3 {
+            transition-delay: .3s
+        }
+
+        /* Scroll bar */
+        ::-webkit-scrollbar {
+            width: 5px
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--c-bg)
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, .1);
+            border-radius: 3px
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="ambient">
+        <div class="orb orb-a"></div>
+        <div class="orb orb-b"></div>
+    </div>
+
+    <!-- NAV -->
+    <nav>
+        <a href="exhibition_pamphlet.html" class="back">← メイン画面に戻る</a>
+        <div class="nav-status"><span class="dot"></span> SYSTEM ONLINE</div>
+    </nav>
+
+    <!-- HEADER -->
+    <div class="page-header reveal">
+        <div class="tag"><span>//</span> ARCHITECT_SUITE_V4.6_HYBRID // TECH_SPEC</div>
+        <h1>Technical Blueprint</h1>
+        <p class="desc">システムアーキテクチャ、プロンプトエンジニアリングの内部ロジック、ACE STEP エンジンの詳細仕様をドキュメント化します。</p>
+    </div>
+
+    <!-- SEC 01: ARCHITECTURE -->
+    <div class="tech-section">
+        <div class="sec-label reveal"><span class="line"></span> 01 — SYSTEM ARCHITECTURE</div>
+        <h2 class="sec-title reveal reveal-d1">システム構成図</h2>
+        <p class="sec-desc reveal reveal-d2">3層アーキテクチャ。フロントエンドからコアエンジンまで、すべてがローカルホスト上で完結します。</p>
+
+        <div class="arch-diagram reveal reveal-d3">
+            <div class="arch-flow">
+                <div class="arch-node">
+                    <div class="name">Frontend</div>
+                    <div class="tech">React / Vite / TypeScript</div>
+                </div>
+                <div class="arch-arrow">⟶</div>
+                <div class="arch-node">
+                    <div class="name">Backend API</div>
+                    <div class="tech">FastAPI (Python)</div>
+                </div>
+                <div class="arch-arrow">⟶</div>
+                <div class="arch-node">
+                    <div class="name">ACE STEP / MiniMax / Seed-VC</div>
+                    <div class="tech">PyTorch / MiniMax API / MDX-Net</div>
+                </div>
+            </div>
+            <div class="arch-note">通信プロトコル: HTTP/REST via Localhost — コアエンジンは独立したサブプロセスとして動作</div>
+        </div>
+    </div>
+
+    <!-- SEC 02: PROMPT ENGINEERING -->
+    <div class="tech-section">
+        <div class="sec-label reveal"><span class="line"></span> 02 — PROMPT ENGINEERING</div>
+        <h2 class="sec-title reveal reveal-d1">Chain of Thought ロジック</h2>
+        <p class="sec-desc reveal reveal-d2">ユーザーの抽象的な意図を、モデルが要求する具体的な音楽記述子に変換。Gemini 2.5 Flash Lite
+            を用いた構造化推論を採用しています。</p>
+
+        <div class="code-block reveal reveal-d3">
+            <div class="code-header">
+                <div class="dots"><span></span><span></span><span></span></div>
+                <span class="lang">prompt_logic.json</span>
+            </div>
+            <div class="code-body">
+                {<br>
+                &nbsp;&nbsp;<span class="k">"user_input"</span>: <span class="s">"Rainy jazz cafe"</span>,<br>
+                &nbsp;&nbsp;<span class="k">"system_logic"</span>: {<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;<span class="k">"step_1"</span>: <span class="s">"感情の分析 → Melancholy,
+                    Relaxed"</span>,<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;<span class="k">"step_2"</span>: <span class="s">"楽器編成の特定 → Piano, Upright Bass,
+                    Brush Drums"</span>,<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;<span class="k">"step_3"</span>: <span class="s">"技術パラメータの決定 → BPM: 70-80, Key:
+                    Bb Major"</span><br>
+                &nbsp;&nbsp;},<br>
+                &nbsp;&nbsp;<span class="k">"generated_prompt"</span>: <span class="s">"[Style: Smooth Jazz],
+                    [Instruments: Acoustic Piano, Double Bass], [Mood: Intimate, Rain sounds], [Tempo: Slow]"</span><br>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- SEC 03: ACE STEP ENGINE -->
+    <div class="tech-section">
+        <div class="sec-label reveal"><span class="line"></span> 03 — CORE ENGINE</div>
+        <h2 class="sec-title reveal reveal-d1">ACE STEP v1.5 Engine</h2>
+        <p class="sec-desc reveal reveal-d2">エンジンは2つの専門AIモデルが連携動作する「Dual-Brain（双脳）」アーキテクチャ。構造的一貫性とオーディオ品質を同時に実現します。</p>
+
+        <div class="engine-grid reveal reveal-d3">
+            <div class="engine-card">
+                <div class="card-header">
+                    <div class="card-icon">📝</div>
+                    <div>
+                        <div class="card-title">Brain 1 — 5Hz LM</div>
+                        <div class="card-subtitle">The Songwriter</div>
+                    </div>
+                </div>
+                <ul class="spec-list">
+                    <li><span class="icon">▸</span> "Semantic Tokens" に特化した言語モデル</li>
+                    <li><span class="icon">▸</span> 動作周波数: 50Hz → 5Hz に圧縮</li>
+                    <li><span class="icon">▸</span> 役割: リズム、メロディ、楽曲構成の設計</li>
+                    <li><span class="icon">▸</span> 出力: 低ビットレート トークンシーケンス</li>
+                </ul>
+            </div>
+            <div class="engine-card">
+                <div class="card-header">
+                    <div class="card-icon">🎚️</div>
+                    <div>
+                        <div class="card-title">Brain 2 — DiT / Seed-VC</div>
+                        <div class="card-subtitle">Performance Rendering</div>
+                    </div>
+                </div>
+                <ul class="spec-list">
+                    <li><span class="icon">▸</span> Seed-VC による任意リファレンスへの声質変換</li>
+                    <li><span class="icon">▸</span> Demucs + MDX-Net による二段階分離精製</li>
+                    <li><span class="icon">▸</span> Diffusion Steps: 最大100段の精密レンダリング</li>
+                    <li><span class="icon">▸</span> F0 Condition 正確なピッチ情報の同期</li>
+                </ul>
+            </div>
+            <ul class="spec-list">
+                <li><span class="icon">▸</span> Diffusion Transformer (Rectified Flow)</li>
+                <li><span class="icon">▸</span> 入力: 5Hz Semantic Tokens + ガウシアンノイズ</li>
+                <li><span class="icon">▸</span> デノイジング: 8 steps (Turbo) / 50 steps (Base)</li>
+                <li><span class="icon">▸</span> 出力: Mel Spectrogram → HiFi-GAN Vocoder</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="engine-connector reveal">
+        <div class="line"></div> Brain 1 → Brain 2 連携動作 <div class="line"></div>
+    </div>
+    </div>
+
+    <!-- SEC 04: MV PRODUCTION -->
+    <div class="tech-section">
+        <div class="sec-label reveal"><span class="line" style="background:#fb7185;"></span> 04 — MV PRODUCTION FLOW
+        </div>
+        <h2 class="sec-title reveal reveal-d1">Audio Separation & Editing</h2>
+        <p class="sec-desc reveal reveal-d2">SOTAモデル "BS-RoFormer" を用いた高純度音源分離。<br>
+            <strong style="color:var(--c-text);display:block;margin-top:0.8em;margin-bottom:0.2em;">Why Isolation?
+                (分離のメリット)</strong>
+            楽器音を排除したクリアなボーカルトラックは、<span
+                style="color:#fb7185;font-weight:700;">MV制作時のリップシンク（口パク）解析精度を劇的に向上</span>させます。ノイズのない波形データが、より自然で正確なキャラクターアニメーションを実現します。
+        </p>
+
+        <div class="arch-diagram reveal reveal-d3" style="border-color:rgba(251, 113, 133, 0.2);">
+            <div class="arch-flow">
+                <div class="arch-node"
+                    style="background:rgba(251, 113, 133, 0.04);border-color:rgba(251, 113, 133, 0.15);">
+                    <div class="name">Input Audio</div>
+                    <div class="tech">MP3 / WAV / MP4</div>
+                </div>
+                <div class="arch-arrow" style="color:#fb7185;">⟶</div>
+                <div class="arch-node"
+                    style="background:rgba(251, 113, 133, 0.04);border-color:rgba(251, 113, 133, 0.15);">
+                    <div class="name">BS-RoFormer</div>
+                    <div class="tech">MDX23 Inst/Voc Separation</div>
+                </div>
+                <div class="arch-arrow" style="color:#fb7185;">⟶</div>
+                <div class="arch-node"
+                    style="background:rgba(251, 113, 133, 0.04);border-color:rgba(251, 113, 133, 0.15);">
+                    <div class="name">Clean Vocal</div>
+                    <div class="tech" style="color:#fb7185;">For High-Precision Lip Sync</div>
+                </div>
+            </div>
+            <div class="arch-note" style="border-color:rgba(251, 113, 133, 0.1);">Processing: PyTorch Inference (GPU) +
+                FFmpeg Transcoding</div>
+        </div>
+    </div>
+
+    <!-- SEC 05: VRAM -->
+    <div class="tech-section">
+        <div class="sec-label reveal"><span class="line"></span> 05 — HARDWARE SPECS</div>
+        <h2 class="sec-title reveal reveal-d1">VRAM 使用量マップ</h2>
+        <p class="sec-desc reveal reveal-d2">GPU メモリに応じたモデル構成と実行能力の一覧。お使いの環境に合わせた最適設定を確認できます。</p>
+
+        <div class="vram-table-wrapper reveal reveal-d3">
+            <table>
+                <thead>
+                    <tr>
+                        <th>GPU Memory</th>
+                        <th>Model Config</th>
+                        <th>最大生成長</th>
+                        <th>Batch Size</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><span class="gpu-badge gpu-4">4 GB</span></td>
+                        <td>Int8 Quantization（量子化）</td>
+                        <td>~180 秒</td>
+                        <td>1</td>
+                    </tr>
+                    <tr>
+                        <td><span class="gpu-badge gpu-8">8 GB</span></td>
+                        <td>FP16 (Half Precision)</td>
+                        <td>~300 秒</td>
+                        <td>2</td>
+                    </tr>
+                    <tr>
+                        <td><span class="gpu-badge gpu-12">12 GB</span></td>
+                        <td>FP16 + Cache Optimization</td>
+                        <td><span class="unlimited">Unlimited（分割生成）</span></td>
+                        <td>4</td>
+                    </tr>
+                    <tr>
+                        <td><span class="gpu-badge gpu-24">24 GB</span></td>
+                        <td>BF16 (High Precision)</td>
+                        <td><span class="unlimited">Unlimited（無制限）</span></td>
+                        <td>8+</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- BOTTOM NAV -->
+    <div class="bottom-nav reveal">
+        <a href="exhibition_pamphlet.html" class="bottom-btn">← メイン画面に戻る</a>
+    </div>
+
+    <!-- FOOTER -->
+    <footer>
+        <p>Generated by Suno Architect Suite v4.5 // <span id="time"></span></p>
+    </footer>
+
+    <script>
+        // Scroll Reveal
+        const obs = new IntersectionObserver((entries) => {
+            entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); obs.unobserve(e.target); } });
+        }, { threshold: 0.08, rootMargin: '0px 0px -50px 0px' });
+        document.querySelectorAll('.reveal').forEach(el => obs.observe(el));
+
+        // Time
+        document.getElementById('time').textContent = new Date().toISOString();
+    </script>
+</body>
+
+</html>

@@ -10,7 +10,7 @@ export enum GenerationMode {
     INSTRUMENTAL = 'INSTRUMENTAL'
 }
 
-export type GeminiModel = 'gemini-3-flash-preview' | 'gemini-2.0-flash' | 'gemini-2.5-flash';
+export type GeminiModel = 'gemini-3-flash-preview' | 'gemini-2.0-flash' | 'gemini-2.5-flash-lite';
 
 export type SearchEngine = 'google-grounding' | 'google-custom' | 'tavily' | 'none';
 
@@ -20,6 +20,9 @@ export interface SongSelection {
     instrumental: boolean;
     content: string;
     comment?: string;
+    minimaxAudioUrl?: string;
+    isMinimaxGenerating?: boolean;
+    minimaxError?: string | null;
 }
 
 export interface GroundingSource {
@@ -56,4 +59,45 @@ export interface AppState {
     searchEngine: SearchEngine;
     modelName: GeminiModel;
     enableVideoAnalysis: boolean;
+}
+
+export interface AceStepState {
+    prompt: string;
+    lyrics: string;
+    thinking: boolean;
+    inference_steps: number;
+    batch_size: number;
+    duration: number;
+    language: string;
+    model: string;
+    sample_mode: boolean;
+    sample_query: string;
+    isGenerating: boolean;
+    taskId: string | null;
+    status: string;
+    progress: number;
+    output_files: any[];
+    error: string | null;
+    imageFile: File | null;
+    isAnalyzing: boolean;
+    theme: string;
+    generatedTitle?: string;
+    seed: number;
+    task_type: string;
+    coverAudioSourceType: 'upload' | 'url';
+    coverAudioUrl: string;
+    coverAudioFile: File | null;
+    audio_cover_strength: number;
+    coverLyricsMode: 'custom' | 'original';
+    isExtractingLyrics: boolean;
+    useAdg: boolean;
+    referenceAudioSourceType: 'upload' | 'url';
+    referenceAudioUrl: string;
+    referenceAudioFile: File | null;
+    isDownloadingSource: boolean;
+    repainting_start: number;
+    repainting_end: number;
+    autoTrim: boolean;
+    fadeDuration: number;
+    useRandomSeed: boolean;
 }

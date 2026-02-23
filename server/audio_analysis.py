@@ -57,16 +57,41 @@ class AudioAnalyzer:
             # Key Detection (Chroma-based)
             key = self._detect_key(y, sr)
             
-            # Peak Segment Detection
-            segments = self._detect_peak_segments(rms, sr, hop_length, duration)
+            # Peak Segment Detection (lowered threshold for more segments)
+            peak_segments = self._detect_peak_segments(rms, sr, hop_length, duration)
+            
+            # Quiet Segment Detection
+            quiet_segments = self._detect_quiet_segments(rms, sr, hop_length, duration)
+            
+            # Intro/Outro Detection
+            intro_outro = self._detect_intro_outro(rms, sr, hop_length, duration)
+            
+            # Additional Metrics
+            avg_energy = float(np.mean(rms_normalized))
+            max_energy = float(np.max(rms_normalized))
+            dynamic_range = float(max_energy - np.min(rms_normalized))
+            
+            # Spectral Centroid (brightness indicator)
+            spectral_centroid = librosa.feature.spectral_centroid(y=y, sr=sr)[0]
+            avg_brightness = float(np.mean(spectral_centroid))
             
             return {
                 "success": True,
-                "duration": duration,
+                "duration": round(duration, 2),
                 "bpm": round(bpm, 1),
                 "key": key,
                 "intensity_curve": intensity_curve,
-                "segments": segments
+                "segments": peak_segments,  # Keep for backward compatibility
+                "segment_types": {
+                    "peak": peak_segments,
+                    "quiet": quiet_segments,
+                    "intro_outro": intro_outro
+                },
+                # Additional metrics
+                "avg_energy": round(avg_energy, 2),
+                "max_energy": round(max_energy, 2),
+                "dynamic_range": round(dynamic_range, 2),
+                "avg_brightness": round(avg_brightness, 1),
             }
             
         except Exception as e:
@@ -119,9 +144,9 @@ class AudioAnalyzer:
         sr: int, 
         hop_length: int,
         duration: float,
-        threshold_percentile: float = 75,
-        min_duration: float = 5.0,
-        max_segments: int = 5
+        threshold_percentile: float = 60,  # Lowered from 75 to detect more segments
+        min_duration: float = 3.0,  # Lowered from 5.0 to detect shorter segments
+        max_segments: int = 8  # Increased from 5
     ) -> List[Dict[str, Any]]:
         """
         Detect peak/climax segments in the audio
@@ -202,6 +227,117 @@ class AudioAnalyzer:
             return "盛り上がり (中)"
         else:
             return "やや盛り上がり"
+    
+    def _detect_quiet_segments(
+        self,
+        rms: np.ndarray,
+        sr: int,
+        hop_length: int,
+        duration: float,
+        threshold_percentile: float = 30,
+        min_duration: float = 3.0,
+        max_segments: int = 5
+    ) -> List[Dict[str, Any]]:
+        """
+        Detect quiet/calm segments (low energy regions)
+        """
+        try:
+            rms_norm = (rms - rms.min()) / (rms.max() - rms.min() + 1e-6)
+            threshold = np.percentile(rms_norm, threshold_percentile)
+            below_threshold = rms_norm <= threshold
+            times = librosa.frames_to_time(np.arange(len(rms)), sr=sr, hop_length=hop_length)
+            
+            segments = []
+            in_segment = False
+            start_idx = 0
+            
+            for i, below in enumerate(below_threshold):
+                if below and not in_segment:
+                    in_segment = True
+                    start_idx = i
+                elif not below and in_segment:
+                    in_segment = False
+                    end_idx = i
+                    start_time = times[start_idx]
+                    end_time = times[end_idx]
+                    
+                    if end_time - start_time >= min_duration:
+                        avg_intensity = float(np.mean(rms_norm[start_idx:end_idx]))
+                        segments.append({
+                            "start": round(start_time, 2),
+                            "end": round(end_time, 2),
+                            "intensity": round(avg_intensity, 2),
+                            "label": "静かなパート"
+                        })
+            
+            segments.sort(key=lambda x: x["intensity"])
+            return segments[:max_segments]
+        except Exception as e:
+            logger.warning(f"Quiet segment detection failed: {e}")
+            return []
+    
+    def _detect_intro_outro(
+        self,
+        rms: np.ndarray,
+        sr: int,
+        hop_length: int,
+        duration: float
+    ) -> List[Dict[str, Any]]:
+        """
+        Detect intro and outro sections based on energy patterns
+        """
+        try:
+            times = librosa.frames_to_time(np.arange(len(rms)), sr=sr, hop_length=hop_length)
+            rms_norm = (rms - rms.min()) / (rms.max() - rms.min() + 1e-6)
+            
+            segments = []
+            
+            # Intro detection (first 15% of track or until energy rises significantly)
+            intro_search_end = int(len(rms) * 0.20)
+            avg_energy_first = np.mean(rms_norm[:intro_search_end])
+            
+            # Find where energy first exceeds average significantly
+            intro_end_idx = 0
+            for i in range(intro_search_end):
+                if rms_norm[i] > avg_energy_first * 1.5:
+                    intro_end_idx = i
+                    break
+            else:
+                intro_end_idx = intro_search_end
+            
+            if intro_end_idx > 0 and times[intro_end_idx] >= 3.0:
+                segments.append({
+                    "start": 0.0,
+                    "end": round(times[intro_end_idx], 2),
+                    "intensity": round(float(np.mean(rms_norm[:intro_end_idx])), 2),
+                    "label": "イントロ"
+                })
+            
+            # Outro detection (last 15% of track or where energy drops)
+            outro_search_start = int(len(rms) * 0.80)
+            avg_energy_last = np.mean(rms_norm[outro_search_start:])
+            
+            outro_start_idx = len(rms) - 1
+            for i in range(len(rms) - 1, outro_search_start, -1):
+                if rms_norm[i] > avg_energy_last * 1.5:
+                    outro_start_idx = i
+                    break
+            else:
+                outro_start_idx = outro_search_start
+            
+            outro_duration = duration - times[outro_start_idx]
+            if outro_duration >= 3.0:
+                segments.append({
+                    "start": round(times[outro_start_idx], 2),
+                    "end": round(duration, 2),
+                    "intensity": round(float(np.mean(rms_norm[outro_start_idx:])), 2),
+                    "label": "アウトロ"
+                })
+            
+            return segments
+        except Exception as e:
+            logger.warning(f"Intro/outro detection failed: {e}")
+            return []
 
 
 # Singleton instance
