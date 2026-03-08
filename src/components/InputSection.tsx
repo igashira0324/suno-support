@@ -20,6 +20,8 @@ interface InputSectionProps {
     onModelChange: (model: string) => void;
     enableVideoAnalysis: boolean;
     onVideoAnalysisToggle: (enabled: boolean) => void;
+    lyricsLanguage: string;
+    onLyricsLanguageChange: (language: string) => void;
 }
 
 const InputSection: React.FC<InputSectionProps> = ({
@@ -40,6 +42,8 @@ const InputSection: React.FC<InputSectionProps> = ({
     onModelChange,
     enableVideoAnalysis,
     onVideoAnalysisToggle,
+    lyricsLanguage,
+    onLyricsLanguageChange,
 }) => {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [searchEnabled, setSearchEnabled] = useState(searchEngine !== 'none');
@@ -226,8 +230,7 @@ const InputSection: React.FC<InputSectionProps> = ({
                         <div>
                             <label className="block text-base font-medium text-slate-300 mb-2">AIモデル</label>
                             <select value={modelName} onChange={(e) => onModelChange(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-base text-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none">
-                                <option value="gemini-2.0-flash">Gemini 2.0 Flash (高速・高制限)</option>
-                                <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash Lite (最新推奨)</option>
+                                <option value="gemini-2.5-flash">Gemini 2.5 Flash (最新・最高精度/無料枠)</option>
                                 <option value="gemini-3-flash-preview">Gemini 3 Flash Preview (最先端)</option>
                             </select>
                         </div>
@@ -263,6 +266,14 @@ const InputSection: React.FC<InputSectionProps> = ({
                             </div>
                         </button>
                     </div>
+
+                    <div>
+                        <label className="block text-base font-medium text-slate-300 mb-2">歌詞の言語</label>
+                        <select value={lyricsLanguage} onChange={(e) => onLyricsLanguageChange(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-base text-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none">
+                            <option value="Japanese">日本語（一部英語混じりOK）</option>
+                            <option value="English">すべて英語</option>
+                        </select>
+                    </div>
                 </div>
             </div>
 
@@ -283,7 +294,7 @@ const InputSection: React.FC<InputSectionProps> = ({
                     <div className="flex items-center gap-2"><Wand2 className="w-5 h-5" /><span>プロンプトを生成する</span></div>
                 )}
             </button>
-        </div>
+        </div >
     );
 };
 

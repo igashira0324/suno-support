@@ -20,8 +20,9 @@ const App: React.FC = () => {
         result: null,
         error: null,
         searchEngine: 'google-grounding',
-        modelName: 'gemini-2.5-flash-lite',
+        modelName: 'gemini-2.5-flash',
         enableVideoAnalysis: false,
+        lyricsLanguage: 'Japanese',
     });
 
     const handleTextChange = (text: string) => setState(prev => ({ ...prev, inputText: text }));
@@ -29,6 +30,7 @@ const App: React.FC = () => {
     const handleSearchEngineChange = (engine: any) => setState(prev => ({ ...prev, searchEngine: engine }));
     const handleModelChange = (model: any) => setState(prev => ({ ...prev, modelName: model }));
     const handleVideoAnalysisToggle = (enabled: boolean) => setState(prev => ({ ...prev, enableVideoAnalysis: enabled }));
+    const handleLyricsLanguageChange = (language: any) => setState(prev => ({ ...prev, lyricsLanguage: language }));
     const handleFileSelect = (file: File | null, type: MediaType) => setState(prev => ({ ...prev, mediaFile: file, mediaType: type, error: null }));
     const handleModeChange = (mode: GenerationMode) => setState(prev => ({ ...prev, generationMode: mode }));
 
@@ -41,7 +43,7 @@ const App: React.FC = () => {
                 state.youtubeUrl,
                 state.mediaFile,
                 state.generationMode,
-                { searchEngine: state.searchEngine, modelName: state.modelName, enableVideoAnalysis: state.enableVideoAnalysis }
+                { searchEngine: state.searchEngine, modelName: state.modelName, enableVideoAnalysis: state.enableVideoAnalysis, lyricsLanguage: state.lyricsLanguage }
             );
             // Phase 1: Clear bestSelection/alternativeSelection to show title selection UI
             const phase1Result = {
@@ -69,7 +71,7 @@ const App: React.FC = () => {
                 selectedTitle,
                 state.result.analysis,
                 state.result.styleCandidates,
-                { modelName: state.modelName }
+                { modelName: state.modelName, lyricsLanguage: state.lyricsLanguage }
             );
 
             // Append to generatedSelections array
@@ -238,6 +240,8 @@ const App: React.FC = () => {
                         onModelChange={handleModelChange}
                         enableVideoAnalysis={state.enableVideoAnalysis}
                         onVideoAnalysisToggle={handleVideoAnalysisToggle}
+                        lyricsLanguage={state.lyricsLanguage}
+                        onLyricsLanguageChange={handleLyricsLanguageChange}
                     />
 
                     {state.error && (

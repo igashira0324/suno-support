@@ -10,7 +10,9 @@ export enum GenerationMode {
     INSTRUMENTAL = 'INSTRUMENTAL'
 }
 
-export type GeminiModel = 'gemini-3-flash-preview' | 'gemini-2.0-flash' | 'gemini-2.5-flash-lite';
+export type GeminiModel = 'gemini-3-flash-preview' | 'gemini-2.5-flash';
+
+export type LyricsLanguage = 'Japanese' | 'English';
 
 export type SearchEngine = 'google-grounding' | 'google-custom' | 'tavily' | 'none';
 
@@ -59,6 +61,7 @@ export interface AppState {
     searchEngine: SearchEngine;
     modelName: GeminiModel;
     enableVideoAnalysis: boolean;
+    lyricsLanguage: LyricsLanguage;
 }
 
 export interface AceStepState {
@@ -100,4 +103,5 @@ export interface AceStepState {
     autoTrim: boolean;
     fadeDuration: number;
     useRandomSeed: boolean;
+    legoTrackName: string;
 }

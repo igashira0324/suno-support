@@ -1048,11 +1048,12 @@ class AceStepRequest(BaseModel):
     sample_query: str = ""
     task_type: str = "text2music"
     audio_cover_strength: float = 0.8
-    repainting_start: float = 0.0
-    repainting_end: float = -1
+    repainting_start: Optional[float] = None
+    repainting_end: Optional[float] = None
     src_audio_path: Optional[str] = None
     use_adg: bool = False
     reference_audio_path: Optional[str] = None
+    track_name: Optional[str] = None
 
 class PostProcessRequest(BaseModel):
     file_url: str
@@ -1647,7 +1648,8 @@ async def acestep_generate(request: AceStepRequest):
         repainting_end=request.repainting_end,
         src_audio_path=request.src_audio_path,
         use_adg=request.use_adg,
-        reference_audio_path=request.reference_audio_path
+        reference_audio_path=request.reference_audio_path,
+        track_name=request.track_name
     )
     
     if "error" in result and result["error"]:

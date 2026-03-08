@@ -42,7 +42,8 @@ const AceStepTab: React.FC = () => {
         repainting_end: -1,
         autoTrim: true,
         fadeDuration: 3,
-        useRandomSeed: true
+        useRandomSeed: true,
+        legoTrackName: 'vocals'
     });
 
     const [visualProgress, setVisualProgress] = useState(0);
@@ -328,7 +329,10 @@ const AceStepTab: React.FC = () => {
         setState(prev => ({
             ...prev,
             model: newModel,
-            inference_steps: isTurbo ? 8 : 32
+            inference_steps: isTurbo ? 8 : 32,
+            // Turbo does not support Thinking Mode or Lego Mode
+            thinking: isTurbo ? false : prev.thinking,
+            task_type: (isTurbo && prev.task_type === 'lego') ? 'text2music' : prev.task_type
         }));
     };
 
@@ -342,14 +346,22 @@ const AceStepTab: React.FC = () => {
                 nextPrompt = "Faithful cover, original melody, high fidelity";
             } else if (nextType === 'repaint' && (prev.prompt === "" || prev.prompt === "A high-energy J-pop song with emotional piano and fast drums.")) {
                 nextPrompt = "Extend song, same style and orchestration, seamless transition";
-            } else if (nextType === 'text2music' && (prev.prompt === "Faithful cover, original melody, high fidelity" || prev.prompt === "Extend song, same style and orchestration, seamless transition")) {
+            } else if (nextType === 'lego' && (prev.prompt === "" || prev.prompt === "A high-energy J-pop song with emotional piano and fast drums.")) {
+                nextPrompt = "Emotional J-pop vocal, expressive, melodic, match the BGM style";
+            } else if (nextType === 'text2music' && (
+                prev.prompt === "Faithful cover, original melody, high fidelity" ||
+                prev.prompt === "Extend song, same style and orchestration, seamless transition" ||
+                prev.prompt === "Emotional J-pop vocal, expressive, melodic, match the BGM style"
+            )) {
                 nextPrompt = "A high-energy J-pop song with emotional piano and fast drums.";
             }
 
             return {
                 ...prev,
                 task_type: nextType,
-                prompt: nextPrompt
+                prompt: nextPrompt,
+                // When leaving lego, if it was automatically turned on, we don't need to force it anymore, just keep current state
+                thinking: prev.thinking
             };
         });
     };
@@ -415,9 +427,9 @@ const AceStepTab: React.FC = () => {
             .catch(err => console.error("Title generation background failed:", err));
 
         try {
-            // If Cover or Repaint mode, upload audio file OR download from URL
+            // If Cover or Repaint or Lego mode, upload audio file OR download from URL
             let srcAudioPath: string | null = null;
-            if (state.task_type === 'cover' || state.task_type === 'repaint') {
+            if (state.task_type === 'cover' || state.task_type === 'repaint' || state.task_type === 'lego') {
                 if (state.coverAudioSourceType === 'upload' && state.coverAudioFile) {
                     const formData = new FormData();
                     formData.append('file', state.coverAudioFile);
@@ -459,6 +471,13 @@ const AceStepTab: React.FC = () => {
                     } finally {
                         setState(prev => ({ ...prev, isDownloadingSource: false }));
                     }
+                } else {
+                    setState(prev => ({
+                        ...prev,
+                        error: "Source audio (Upload or URL) is required for Cover, Repaint, or Lego mode.",
+                        isGenerating: false
+                    }));
+                    return;
                 }
             }
 
@@ -475,7 +494,7 @@ const AceStepTab: React.FC = () => {
             const requestBody = {
                 prompt: state.prompt,
                 lyrics: state.lyrics,
-                thinking: state.thinking,
+                thinking: state.task_type === 'lego' ? true : state.thinking,
                 inference_steps: state.inference_steps,
                 batch_size: state.batch_size,
                 duration: state.duration,
@@ -490,7 +509,8 @@ const AceStepTab: React.FC = () => {
                 repainting_end: state.repainting_end,
                 src_audio_path: srcAudioPath,
                 use_adg: state.useAdg,
-                reference_audio_path: (state.useAdg && srcAudioPath) ? srcAudioPath : null
+                reference_audio_path: (state.useAdg && srcAudioPath) ? srcAudioPath : null,
+                track_name: state.task_type === 'lego' ? state.legoTrackName : undefined
             };
 
             const response = await fetch("http://localhost:8100/acestep/generate", {
@@ -788,7 +808,9 @@ const AceStepTab: React.FC = () => {
                                                 ? 'Create new music from prompts / プロンプトから新規作成'
                                                 : state.task_type === 'cover'
                                                     ? 'Arrange existing music / 既存楽曲をアレンジ'
-                                                    : 'Extend audio context / 既存楽曲の続きを生成'}
+                                                    : state.task_type === 'lego'
+                                                        ? 'Add vocals/instruments to BGM / BGMにボーカル・楽器を追加'
+                                                        : 'Extend audio context / 既存楽曲の続きを生成'}
                                         </p>
                                     </div>
                                     <div className="flex bg-slate-900/80 p-1 rounded-xl border border-white/5 w-fit ml-auto">
@@ -809,6 +831,16 @@ const AceStepTab: React.FC = () => {
                                             className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all duration-300 ${state.task_type === 'repaint' ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/25' : 'text-slate-500 hover:text-slate-300'}`}
                                         >
                                             REPAINT
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                if (!state.model.includes('turbo')) handleTaskTypeChange('lego')
+                                            }}
+                                            disabled={state.model.includes('turbo')}
+                                            title={state.model.includes('turbo') ? "Lego requires Base model" : ""}
+                                            className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all duration-300 ${state.model.includes('turbo') ? 'opacity-50 cursor-not-allowed text-slate-600' : state.task_type === 'lego' ? 'bg-violet-500 text-white shadow-lg shadow-violet-500/25' : 'text-slate-500 hover:text-slate-300'}`}
+                                        >
+                                            LEGO
                                         </button>
                                     </div>
                                 </div>
@@ -1042,9 +1074,229 @@ const AceStepTab: React.FC = () => {
                                         </div>
                                     </div>
                                 )}
+
+                                {/* Lego Mode Controls */}
+                                {state.task_type === 'lego' && (
+                                    <div className="space-y-4 pt-3 border-t border-white/5 animate-in slide-in-from-top-2">
+
+                                        {/* Turbo warning */}
+                                        {state.model.includes('turbo') && (
+                                            <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/30 rounded-xl px-3 py-2">
+                                                <AlertCircle className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+                                                <p className="text-[9px] text-amber-300 font-bold">
+                                                    Legoモードは <span className="text-amber-200">v1.5 Base</span> モデルが必須です。モデルを変更してください。
+                                                </p>
+                                            </div>
+                                        )}
+
+                                        {/* LEGO Mode Overview Info Panel */}
+                                        <div className="bg-violet-500/5 border border-violet-500/20 rounded-xl p-3 space-y-1.5">
+                                            <div className="flex items-center gap-1.5">
+                                                <span className="text-[10px]">🧱</span>
+                                                <span className="text-[10px] font-black text-violet-300 uppercase tracking-wider">LEGO Mode / レゴモード</span>
+                                            </div>
+                                            <p className="text-[9px] text-slate-400 leading-relaxed">
+                                                インスト原曲（BGM）に<span className="text-violet-300 font-bold">ボーカルや楽器パート</span>をAIで追加する機能です。
+                                                原曲のメロディ・リズム・コード進行を保持したまま、新しいトラックを生成します。
+                                            </p>
+                                            <p className="text-[9px] text-slate-500 leading-relaxed">
+                                                Add AI-generated <span className="text-violet-300/80 font-bold">vocals or instruments</span> on top of your instrumental BGM.
+                                                The original melody, rhythm, and chord progression are preserved.
+                                            </p>
+                                        </div>
+
+                                        {/* BGM Source Upload/Url Toggle */}
+                                        <div className="flex bg-slate-800/50 p-1 rounded-lg">
+                                            <button
+                                                onClick={() => setState(prev => ({ ...prev, coverAudioSourceType: 'upload' }))}
+                                                className={`flex-1 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all ${state.coverAudioSourceType === 'upload'
+                                                    ? 'bg-slate-700 text-white shadow-sm'
+                                                    : 'text-slate-500 hover:text-slate-300'
+                                                    }`}
+                                            >
+                                                File Upload
+                                            </button>
+                                            <button
+                                                onClick={() => setState(prev => ({ ...prev, coverAudioSourceType: 'url' }))}
+                                                className={`flex-1 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all ${state.coverAudioSourceType === 'url'
+                                                    ? 'bg-slate-700 text-white shadow-sm'
+                                                    : 'text-slate-500 hover:text-slate-300'
+                                                    }`}
+                                            >
+                                                URL Import
+                                            </button>
+                                        </div>
+
+                                        {/* BGM Source Upload/Url Input */}
+                                        <div>
+                                            <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-1.5 mb-2">
+                                                <FileAudio className="w-3 h-3" />
+                                                BGM Source / 元のインスト音源
+                                            </label>
+
+                                            {state.coverAudioSourceType === 'upload' ? (
+                                                <div
+                                                    className={`relative w-full h-16 border-2 border-dashed rounded-xl flex flex-col items-center justify-center cursor-pointer transition-all overflow-hidden ${state.coverAudioFile ? 'border-violet-500/50 bg-violet-500/5' : 'border-slate-700 hover:border-slate-500 hover:bg-slate-800/50'}`}
+                                                    onDragOver={handleDragOver}
+                                                    onDrop={handleCoverAudioDrop}
+                                                >
+                                                    <input
+                                                        type="file"
+                                                        accept="audio/*"
+                                                        onChange={handleCoverAudioUpload}
+                                                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                                                    />
+                                                    {state.coverAudioFile ? (
+                                                        <div className="relative z-20 flex items-center gap-2 bg-slate-900/80 px-3 py-1.5 rounded-lg text-xs font-bold text-violet-300 backdrop-blur-sm border border-violet-500/30">
+                                                            <FileAudio className="w-3.5 h-3.5" />
+                                                            {state.coverAudioFile.name}
+                                                            <button onClick={(e) => { e.stopPropagation(); clearCoverAudio(); }} className="ml-1 text-slate-400 hover:text-red-400">
+                                                                <X className="w-3 h-3" />
+                                                            </button>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="text-center space-y-1 pointer-events-none">
+                                                            <Upload className="w-4 h-4 mx-auto text-slate-500" />
+                                                            <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">BGM Audio (.mp3, .wav)</p>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ) : (
+                                                <div className="space-y-1">
+                                                    <div className="relative">
+                                                        <input
+                                                            type="text"
+                                                            value={state.coverAudioUrl || ''}
+                                                            onChange={(e) => setState(prev => ({ ...prev, coverAudioUrl: e.target.value }))}
+                                                            placeholder="https://www.youtube.com/watch?v=..."
+                                                            className="w-full bg-slate-900 border border-white/5 rounded-xl px-4 py-2.5 text-xs text-slate-200 focus:ring-2 focus:ring-violet-500/50 outline-none placeholder:text-slate-700"
+                                                        />
+                                                    </div>
+                                                    <p className="text-[9px] text-slate-500 italic">Supported: YouTube, SoundCloud, Suno, etc.</p>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Generation Range */}
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="space-y-2">
+                                                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-1.5">
+                                                    <Clock className="w-3 h-3" />
+                                                    Start (Sec)
+                                                </label>
+                                                <input
+                                                    type="number"
+                                                    value={state.repainting_start}
+                                                    onChange={(e) => setState(prev => ({ ...prev, repainting_start: parseFloat(e.target.value) }))}
+                                                    className="w-full bg-slate-900 border border-white/5 rounded-xl px-3 py-2 text-xs text-slate-200 outline-none focus:ring-1 focus:ring-violet-500/50"
+                                                />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-1.5">
+                                                    <ArrowRight className="w-3 h-3" />
+                                                    End (-1=Auto)
+                                                </label>
+                                                <input
+                                                    type="number"
+                                                    value={state.repainting_end}
+                                                    onChange={(e) => setState(prev => ({ ...prev, repainting_end: parseFloat(e.target.value) }))}
+                                                    className="w-full bg-slate-900 border border-white/5 rounded-xl px-3 py-2 text-xs text-slate-200 outline-none focus:ring-1 focus:ring-violet-500/50"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        {/* Track Name Selector */}
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-1.5">
+                                                <Mic className="w-3 h-3" />
+                                                Generate Track / 生成するパート
+                                            </label>
+                                            <div className="relative">
+                                                <select
+                                                    value={state.legoTrackName}
+                                                    onChange={(e) => setState(prev => ({ ...prev, legoTrackName: e.target.value }))}
+                                                    className="w-full bg-slate-900 border border-white/5 rounded-xl px-4 py-2.5 text-slate-200 appearance-none focus:ring-2 focus:ring-violet-500/50 outline-none text-xs font-bold cursor-pointer"
+                                                >
+                                                    <option value="vocals">🎤 Vocals（リードボーカル）</option>
+                                                    <option value="backing_vocals">🎵 Backing Vocals（コーラス）</option>
+                                                    <option value="drums">🥁 Drums（ドラム）</option>
+                                                    <option value="bass">🎸 Bass（ベース）</option>
+                                                    <option value="guitar">🎸 Guitar（ギター）</option>
+                                                    <option value="keyboard">🎹 Keyboard（キーボード）</option>
+                                                    <option value="percussion">🪘 Percussion（パーカッション）</option>
+                                                    <option value="strings">🎻 Strings（弦楽器）</option>
+                                                    <option value="synth">🎛️ Synth（シンセ）</option>
+                                                    <option value="brass">🎺 Brass（金管楽器）</option>
+                                                    <option value="woodwinds">🪗 Woodwinds（木管楽器）</option>
+                                                    <option value="fx">✨ FX（エフェクト）</option>
+                                                </select>
+                                                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500">
+                                                    <svg width="10" height="6" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M1 1L5 5L9 1" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                                                </div>
+                                            </div>
+                                            <p className="text-[9px] text-slate-400">
+                                                {state.legoTrackName === 'vocals'
+                                                    ? '🎤 歌詞に基づいたリードボーカルを生成します。下部の歌詞欄に歌詞を入力してください。'
+                                                    : state.legoTrackName === 'backing_vocals'
+                                                        ? '🎵 メインボーカルを補完するハーモニー・コーラスパートを生成します。'
+                                                        : `BGMに${state.legoTrackName.replace('_', ' ')}パートを追加生成します。`
+                                                }
+                                            </p>
+                                        </div>
+
+                                        {/* Lego Cover Strength Slider */}
+                                        <div className="space-y-2 pt-2 border-t border-white/5">
+                                            <div className="flex items-center justify-between">
+                                                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-1.5">
+                                                    <Sliders className="w-3 h-3" />
+                                                    Cover Strength / 原曲BGMへの忠実度
+                                                    <div className="group relative">
+                                                        <AlertCircle className="w-3 h-3 text-slate-600 cursor-help" />
+                                                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 p-2.5 bg-slate-800 text-[9px] text-slate-300 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 border border-white/5 shadow-xl leading-relaxed">
+                                                            <span className="text-violet-300 font-bold">原曲に近い仕上がり</span>にしたい場合は<span className="text-violet-300 font-bold"> 0.7〜0.9 </span>を推奨。
+                                                            値が高いほど原曲BGMの構造（メロディ・リズム・コード）を忠実に保持します。
+                                                            <br /><span className="text-slate-500">0.0 = 自由生成 / 0.5 = バランス / 0.8 = アレンジ程度 / 1.0 = 変化なし</span>
+                                                        </div>
+                                                    </div>
+                                                </label>
+                                                <span className="text-[10px] font-mono text-violet-400 font-bold">{state.audio_cover_strength.toFixed(1)}</span>
+                                            </div>
+                                            <input
+                                                type="range"
+                                                min="0"
+                                                max="1"
+                                                step="0.1"
+                                                value={state.audio_cover_strength}
+                                                onChange={(e) => setState(prev => ({ ...prev, audio_cover_strength: parseFloat(e.target.value) }))}
+                                                className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-violet-500"
+                                            />
+                                            <div className="flex justify-between text-[8px] font-bold uppercase">
+                                                <span className="text-slate-600">0.0 自由生成</span>
+                                                <span className="text-violet-400/60">0.5 バランス</span>
+                                                <span className="text-violet-400">0.8 推奨 ⭐</span>
+                                                <span className="text-slate-600">1.0 変化なし</span>
+                                            </div>
+                                        </div>
+
+                                        {/* Tips for original-like results */}
+                                        <div className="bg-slate-800/30 border border-white/5 rounded-xl p-3 space-y-1.5">
+                                            <div className="flex items-center gap-1.5">
+                                                <span className="text-[10px]">💡</span>
+                                                <span className="text-[10px] font-bold text-slate-400">原曲に近い仕上がりにするコツ / Tips</span>
+                                            </div>
+                                            <ul className="text-[9px] text-slate-500 space-y-1 pl-4 list-disc leading-relaxed">
+                                                <li><span className="text-violet-300/80 font-bold">Cover Strength 0.7〜0.9</span>：原曲の雰囲気を最大限に保持</li>
+                                                <li><span className="text-violet-300/80 font-bold">Steps 32+</span>：高品質な生成（BaseモデルのデフォルトSTEPS=32）</li>
+                                                <li><span className="text-violet-300/80 font-bold">Theme/テーマ欄</span>：原曲のジャンルや雰囲気を記述すると忠実度UP</li>
+                                                <li><span className="text-violet-300/80 font-bold">歌詞のタイミング</span>：[Verse][Chorus]タグを使って構成を指定</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
 
                             <div className="bg-slate-900/50 rounded-xl p-4 border border-white/5 space-y-5">
+
                                 <div className="flex items-center justify-between">
                                     <div className="space-y-1">
                                         <label className="text-xs font-bold text-slate-200 flex items-center gap-2">
@@ -1059,12 +1311,22 @@ const AceStepTab: React.FC = () => {
                                         </label>
                                         <p className="text-[10px] text-slate-500">Refined plan for higher quality result</p>
                                     </div>
-                                    <button
-                                        onClick={() => setState(prev => ({ ...prev, thinking: !prev.thinking }))}
-                                        className={`w-12 h-6 rounded-full relative transition-colors duration-300 ${state.thinking ? 'bg-indigo-600' : 'bg-slate-700'}`}
-                                    >
-                                        <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all duration-300 ${state.thinking ? 'left-7' : 'left-1'}`} />
-                                    </button>
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            onClick={() => {
+                                                if (state.task_type === 'lego' || state.model.includes('turbo')) return;
+                                                setState(prev => ({ ...prev, thinking: !prev.thinking }));
+                                            }}
+                                            disabled={state.model.includes('turbo')}
+                                            title={state.model.includes('turbo') ? "Thinking Mode requires Base model" : ""}
+                                            className={`w-12 h-6 rounded-full relative transition-colors duration-300 ${state.thinking ? 'bg-indigo-600' : 'bg-slate-700'} ${state.model.includes('turbo') ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                        >
+                                            <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all duration-300 ${state.thinking ? 'left-7' : 'left-1'}`} />
+                                        </button>
+                                        {state.model.includes('turbo') ? (
+                                            <span className="text-[10px] text-slate-500 font-bold whitespace-nowrap">※Baseモデル専用</span>
+                                        ) : null}
+                                    </div>
                                 </div>
 
                                 <div className="space-y-3 pt-2 border-t border-white/5">

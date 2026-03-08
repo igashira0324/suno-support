@@ -44,6 +44,31 @@ def release_task(prompt, lyrics, **kwargs):
             if ref_audio:
                 payload["reference_audio_path"] = ref_audio
 
+    # Handle Lego mode parameters
+    # Lego requires:
+    # 1. track_name baked into instruction (API does not accept track_name separately)
+    # 2. repainting_start/end to mark region for new track generation
+    # 3. instrumental=False to ensure vocals are generated (not silenced)
+    # 4. audio_cover_strength controls BGM vs new track mix
+    if kwargs.get("task_type") == "lego":
+        src_audio = kwargs.get("src_audio_path")
+        if src_audio:
+            payload["src_audio_path"] = src_audio
+        track_name = kwargs.get("track_name", "vocals")
+        # Build instruction with track_name resolved (ACE-Step API doesn't accept track_name separately)
+        # TASK_INSTRUCTIONS["lego"] = "Generate the {TRACK_NAME} track based on the audio context:"
+        # We must resolve {TRACK_NAME} here before sending, otherwise the placeholder is passed as-is to DiT!
+        payload["instruction"] = f"Generate the {track_name.upper()} track based on the audio context:"
+        # Repaint full range to generate new track (vocals) over entire duration
+        payload["repainting_start"] = kwargs.get("repainting_start", 0.0)
+        payload["repainting_end"] = kwargs.get("repainting_end", -1)
+        # audio_cover_strength: 0.5 is balanced (BGM preserved + new vocals added)
+        # 1.0 = exact reproduction (no new content), 0.0 = completely free generation
+        payload["audio_cover_strength"] = kwargs.get("audio_cover_strength", 0.5)
+        # CRITICAL: instrumental must be False to ensure vocals are generated!
+        # If instrumental=True or lyrics has [inst], ACE-Step silences the vocal output.
+        payload["instrumental"] = False
+
     # Handle Repaint mode parameters
     if kwargs.get("task_type") == "repaint":
         src_audio = kwargs.get("src_audio_path")
@@ -65,8 +90,8 @@ def release_task(prompt, lyrics, **kwargs):
         response.raise_for_status()
         return response.json()
     except requests.exceptions.ConnectionError:
-        error_msg = "ACE-Step API Server (Port 8101) is not running. Please start the server."
-        logger.error(error_msg)
+        error_msg = "ACE-Step API Server (Port 8101) is currently starting up. Please wait 1-2 minutes for the model to load, then try again. / ACE-Step サーバーが起動中です。モデルのロードに1〜2分かかりますので、少々お待ちください。"
+        logger.warning(error_msg)
         return {"code": 503, "error": error_msg}
     except Exception as e:
         logger.error(f"Failed to release task: {e}")

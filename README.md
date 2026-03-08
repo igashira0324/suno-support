@@ -110,7 +110,7 @@ graph TB
 
 | カテゴリ | モデル名 | 特徴 |
 |---------|---------|------|
-| **LLM (Planning)** | `gemini-2.5-flash-lite`, `gemini-2.0-flash` | 高速・高精度な楽曲設計 |
+| **LLM (Planning)** | `gemini-2.5-flash` | 高速・高精度な楽曲設計 |
 | **Music (Cloud)** | `MiniMax Music 2.5` | 最新のクラウド生成モデル |
 | **Music (Local)** | `acestep-v15-base / turbo` | 柔軟なローカル生成、ADG対応 |
 | **Custom Music** | `YuE (Best/Balanced/Fast)` | 専門的な音源生成 |

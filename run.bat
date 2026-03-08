@@ -27,7 +27,7 @@ start "Local LLM Service" "local_llm\start_lfm.bat"
 echo [4/4] Starting Suno Architect Suite (Unified Window)...
 echo Backend: http://localhost:8100
 echo ACESTEP: http://localhost:8101
-echo Frontend: http://localhost:3000
+echo Frontend: http://localhost:3300
 echo.
 
 call npm run dev:all

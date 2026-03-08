@@ -116,7 +116,7 @@ export const generateSunoPrompt = async (
     youtubeUrl: string,
     file: File | null,
     mode: GenerationMode = GenerationMode.AUTO,
-    options: { searchEngine: SearchEngine; modelName: string; enableVideoAnalysis?: boolean } = { searchEngine: 'google-grounding', modelName: 'gemini-1.5-flash', enableVideoAnalysis: false },
+    options: { searchEngine: SearchEngine; modelName: string; enableVideoAnalysis?: boolean; lyricsLanguage?: string } = { searchEngine: 'google-grounding', modelName: 'gemini-2.5-flash', enableVideoAnalysis: false, lyricsLanguage: 'Japanese' },
     theme: string = ""
 ): Promise<SunoResponse> => {
     try {
@@ -125,8 +125,8 @@ export const generateSunoPrompt = async (
 
         const genAI = new GoogleGenAI({ apiKey: apiKey });
 
-        // Use the model selected by user, default to gemini-1.5-flash
-        const modelName = options.modelName || "gemini-1.5-flash";
+        // Use the model selected by user, default to gemini-2.5-flash
+        const modelName = options.modelName || "gemini-2.5-flash";
 
 
         const parts: any[] = [];
@@ -154,6 +154,12 @@ export const generateSunoPrompt = async (
         }
 
         if (text) prompt += `\nCurrent Prompt Context: ${text}\n`;
+
+        if (options.lyricsLanguage === 'English') {
+            prompt += `\n[言語指定] 歌詞はすべて「英語（English）」で記述してください。日本語は使用しないでください。\n`;
+        } else {
+            prompt += `\n[言語指定] 歌詞のベースは「日本語」としてください。ただし、サビやフレーズの一部に自然な英語が混ざるのは問題ありません（むしろ推奨されます）。\n`;
+        }
 
         parts.push({ text: prompt });
 
@@ -243,23 +249,23 @@ export const generateFromSelectedTitle = async (
     selectedTitle: string,
     originalAnalysis: string,
     styleCandidates: string[],
-    options: { modelName: string } = { modelName: 'gemini-1.5-flash' }
+    options: { modelName: string; lyricsLanguage?: string } = { modelName: 'gemini-2.5-flash', lyricsLanguage: 'Japanese' }
 ): Promise<{ bestSelection: any; alternativeSelection: any; tokenUsage?: any }> => {
     try {
         const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY;
         if (!apiKey) throw new Error("API Key is missing.");
 
         const genAI = new GoogleGenAI({ apiKey: apiKey });
-        const modelName = options.modelName || "gemini-1.5-flash";
+        const modelName = options.modelName || "gemini-2.5-flash";
 
-        const prompt = `
+        let prompt = `
 // ... (omitted)
 
 export const generateTitle = async (
     lyrics: string,
     theme: string,
     prompt: string,
-    modelName: string = 'gemini-1.5-flash'
+    modelName: string = 'gemini-2.5-flash'
 ): Promise<string> => {
 ## タスク
 以下の分析結果と選択されたタイトルに基づいて、Suno v4.5用の楽曲プロンプトを2パターン生成してください。
@@ -278,6 +284,12 @@ ${styleCandidates.join('\n')}
 - alternativeSelection: 同じタイトルで異なるアプローチ（変化球）を提案
 - commentは必ず日本語で記述すること
 `;
+
+        if (options.lyricsLanguage === 'English') {
+            prompt += `\n[言語指定] 歌詞はすべて「英語（English）」で記述してください。日本語は使用しないでください。\n`;
+        } else {
+            prompt += `\n[言語指定] 歌詞のベースは「日本語」としてください。ただし、サビやフレーズの一部に自然な英語が混ざるのは問題ありません（むしろ推奨されます）。\n`;
+        }
 
         const config: any = {
             systemInstruction: SYSTEM_INSTRUCTION,
@@ -319,7 +331,7 @@ export const generateTitle = async (
     lyrics: string,
     theme: string,
     prompt: string,
-    modelName: string = 'gemini-1.5-flash'
+    modelName: string = 'gemini-2.5-flash'
 ): Promise<string> => {
     try {
         const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY;
