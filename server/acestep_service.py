@@ -23,6 +23,9 @@ def release_task(prompt, lyrics, **kwargs):
         "model": kwargs.get("model", "acestep-v15-turbo"),
         "seed": kwargs.get("seed", -1),
         "task_type": kwargs.get("task_type", "text2music"),
+        "shift": kwargs.get("shift", 1.0),
+        "infer_method": kwargs.get("infer_method", "ode"),
+        "guidance_scale": kwargs.get("guidance_scale", 7.0),
     }
     
     # Handle optional sampling mode
@@ -68,6 +71,11 @@ def release_task(prompt, lyrics, **kwargs):
         # CRITICAL: instrumental must be False to ensure vocals are generated!
         # If instrumental=True or lyrics has [inst], ACE-Step silences the vocal output.
         payload["instrumental"] = False
+        # Enable Thinking mode for Lego tasks so that it properly aligns logic with the track context
+        payload["thinking"] = True
+
+    logger.info("Releasing task with payload:")
+    print(json.dumps(payload, indent=2))
 
     # Handle Repaint mode parameters
     if kwargs.get("task_type") == "repaint":

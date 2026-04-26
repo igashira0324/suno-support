@@ -1,4 +1,4 @@
-# Suno Architect Suite (v4.6 Hybrid)
+# Suno Architect Suite (v4.7 Hybrid)
 
 Suno AI (v4.5/v5) のポテンシャルを最大限に引き出すための統合開発環境です。
 Gemini 1.5 Pro / 2.0 Flash / 3.1 Pro などの最新AIモデルを活用し、プロンプト生成から歌詞生成、MV制作支援までをワンストップで行えます。
@@ -23,10 +23,11 @@ Gemini 1.5 Pro / 2.0 Flash / 3.1 Pro などの最新AIモデルを活用し、�
 ### 3. ACE-STEP v1.5 Integration (Local & Limitless)
 Suno AI 級の高品質な音楽生成を、**完全ローカル環境**で実現。
 *   **ADG (Audio Directed Generation) (New!)**: 参考音源（リファレンストラック）を指定し、そのスタイルや音響特性を保ったまま新しい曲を生成。
-*   **Multi-Stage Lyrics Pipeline (New!)**: 
-    1. **Direct Extract**: Suno APIから直接歌詞を取得。
+*   **Multi-Stage Lyrics & Style Pipeline (Enhanced!)**: 
+    1. **Direct Extract**: Suno APIから直接歌詞と楽曲スタイル（Tags）を抽出。
     2. **Smart Subtitles**: YouTube字幕（VTT形式）からクリーンな歌詞を抽出。
-    3. **AI Whisper ASR**: 音声認識により、音源から直接歌詞を書き起こし、AIで構成をタグ付け。
+    3. **AI Style Generation (New!)**: 歌詞データをもとに、Gemini AIが最適なSuno v4.5向けスタイルプロンプト（タグ形式）を自動生成。
+    4. **AI Whisper ASR**: 音声認識により、音源から直接歌詞を書き起こし、AIで構成をタグ付け。
 *   **Creative Modes**: Text-to-Music / Cover (Style Transfer) / LoRA / Repaint.
 *   **Post-Gen Vocal Replacement (Enhanced with Seed-VC)**: 
     - **Pro Tuning / 詳細設定**: Diffusion Steps, Pitch Shift, F0 Condition, Auto F0 Adjust などの精密な調整に対応。

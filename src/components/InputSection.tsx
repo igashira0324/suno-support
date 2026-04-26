@@ -230,8 +230,8 @@ const InputSection: React.FC<InputSectionProps> = ({
                         <div>
                             <label className="block text-base font-medium text-slate-300 mb-2">AIモデル</label>
                             <select value={modelName} onChange={(e) => onModelChange(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-base text-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none">
-                                <option value="gemini-2.5-flash">Gemini 2.5 Flash (最新・最高精度/無料枠)</option>
-                                <option value="gemini-3-flash-preview">Gemini 3 Flash Preview (最先端)</option>
+                                <option value="gemini-3-flash-preview">Gemini 3 Flash (推奨・最高コスパ)</option>
+                                <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro (高精度・多機能)</option>
                             </select>
                         </div>
 

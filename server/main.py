@@ -24,6 +24,7 @@ import yue_service
 import audio_analysis
 import clap_service
 import acestep_service
+from svs_service import SVSService
 
 app = FastAPI()
 
@@ -67,6 +68,7 @@ logger.info(f"UPLOAD_DIR: {UPLOAD_DIR}")
 logger.info(f"OUTPUT_DIR: {OUTPUT_DIR}")
 
 tasks: Dict[str, dict] = {}
+svs_service = SVSService(upload_dir=str(UPLOAD_DIR), output_dir=str(OUTPUT_DIR))
 
 import sys
 
@@ -1216,6 +1218,7 @@ async def extract_lyrics(request: ExtractLyricsRequest):
     Step 2: Fallback to Whisper speech recognition.
     """
     lyrics_text = None
+    prompt_text = None
     method = None
     
     # Step 1: Try Suno API if it's a Suno URL
@@ -1250,8 +1253,11 @@ async def extract_lyrics(request: ExtractLyricsRequest):
                             if data and isinstance(data, list) and len(data) > 0:
                                 song_data = data[0]
                                 prompt_lyrics = song_data.get("metadata", {}).get("prompt", "")
+                                suno_tags = song_data.get("metadata", {}).get("tags", "")
                                 if prompt_lyrics and prompt_lyrics.strip():
                                     lyrics_text = prompt_lyrics.strip()
+                                    if suno_tags:
+                                        prompt_text = suno_tags.strip()
                                     method = "suno_api"
                                     break
                     except Exception as api_err:
@@ -1282,6 +1288,20 @@ async def extract_lyrics(request: ExtractLyricsRequest):
                                             pass
                                     method = "suno_scrape_regex_v2"
                                     logger.info(f"Suno lyrics found via HTML regex v2: {len(lyrics_text)} chars")
+                                    
+                                    # Also try extracting tags
+                                    tags_match = re.search(r'\"tags\":\"(.*?)(?<!\\)\"', html)
+                                    if tags_match:
+                                        try:
+                                            raw_tags = tags_match.group(1)
+                                            prompt_text = raw_tags.replace('\\n', '\n').replace('\\"', '"')
+                                            if '\\u' in prompt_text:
+                                                try:
+                                                    prompt_text = raw_tags.encode('utf-8').decode('unicode_escape')
+                                                except:
+                                                    pass
+                                        except:
+                                            pass
                                 except Exception as e:
                                     logger.warning(f"Regex v2 decoding error: {e}")
                             
@@ -1329,11 +1349,27 @@ async def extract_lyrics(request: ExtractLyricsRequest):
                                                     if res: return res
                                             return None
                                         
+                                        def find_tags(obj):
+                                            if isinstance(obj, dict):
+                                                if 'tags' in obj and isinstance(obj['tags'], str) and len(obj['tags'].strip()) > 0:
+                                                    return obj['tags'].strip()
+                                                for v in obj.values():
+                                                    res = find_tags(v)
+                                                    if res: return res
+                                            elif isinstance(obj, list):
+                                                for item in obj:
+                                                    res = find_tags(item)
+                                                    if res: return res
+                                            return None
+                                        
                                         scraped_prompt = find_prompt(next_data)
                                         if scraped_prompt:
                                             lyrics_text = scraped_prompt
                                             method = "suno_scrape_next"
                                             logger.info("Suno lyrics found via HTML NEXT_DATA")
+                                            scraped_tags = find_tags(next_data)
+                                            if scraped_tags:
+                                                prompt_text = scraped_tags
                                     except Exception as json_err:
                                         logger.warning(f"Suno NEXT_DATA parse error: {json_err}")
                     except Exception as scrape_err:
@@ -1341,7 +1377,7 @@ async def extract_lyrics(request: ExtractLyricsRequest):
 
                 if lyrics_text:
                     logger.info(f"Suno direct extraction successful ({method}, {len(lyrics_text)} chars)")
-                    return {"lyrics": lyrics_text, "method": method}
+                    return {"lyrics": lyrics_text, "prompt": prompt_text, "method": method}
                 
                 logger.info("All Suno direct extraction methods failed. Falling back to Whisper/ASR...")
             except Exception as e:
@@ -1514,7 +1550,7 @@ async def extract_lyrics(request: ExtractLyricsRequest):
     if whisper_temp.exists():
         shutil.rmtree(whisper_temp, ignore_errors=True)
     
-    return {"lyrics": lyrics_text, "method": method}
+    return {"lyrics": lyrics_text, "prompt": prompt_text, "method": method}
 
 
 def _parse_subtitle_to_lyrics(raw_sub: str) -> str:
@@ -1805,6 +1841,8 @@ async def acestep_status(task_id: str, request: Request):
     return harmonized
 class SaveFileRequest(BaseModel):
     file_url: str
+    theme: Optional[str] = None
+    title: Optional[str] = None
 
 @app.post("/save_file")
 async def save_file(request: SaveFileRequest):
@@ -1818,27 +1856,44 @@ async def save_file(request: SaveFileRequest):
     save_dir = OUTPUT_DIR / "ACE-STEP"
     save_dir.mkdir(parents=True, exist_ok=True)
     
-    # Generate a unique filename
-    filename = f"saved_{uuid.uuid4().hex[:8]}.wav"
-    
+    # Determine extension and fallback name from URL
     import urllib.parse
     parsed = urllib.parse.urlparse(file_url)
+    original_name = ""
     if "path=" in parsed.query:
         query_params = urllib.parse.parse_qs(parsed.query)
         if "path" in query_params:
-            original_path = query_params["path"][0]
-            name = Path(original_path).name
-            if name and "." in name:
-                filename = name
+            original_name = Path(query_params["path"][0]).name
     else:
-        name = Path(parsed.path).name
-        if name and "." in name:
-            filename = name
+        original_name = Path(parsed.path).name
+
+    ext = ".wav"  # Default
+    url_stem = ""
+    if original_name and "." in original_name:
+        p = Path(original_name)
+        ext = p.suffix
+        url_stem = p.stem
+    
+    # Helper for sanitization: replace invalid chars with underscores
+    def sanitize(name: str):
+        if not name: return None
+        # Invalid Windows chars: \ / : * ? " < > |
+        s = re.sub(r'[\\/:*?"<>|]', '_', name).strip(" .")
+        return s[:200] if s else None
+
+    # Priority: theme > title > original_stem > uuid
+    base_name = sanitize(request.theme)
+    if not base_name:
+        base_name = sanitize(request.title)
+    if not base_name:
+        base_name = sanitize(url_stem)
+    if not base_name:
+        base_name = f"saved_{uuid.uuid4().hex[:8]}"
             
-    dest_path = save_dir / filename
+    dest_path = save_dir / f"{base_name}{ext}"
     counter = 1
     while dest_path.exists():
-        dest_path = save_dir / f"{dest_path.stem}_{counter}{dest_path.suffix}"
+        dest_path = save_dir / f"{base_name}_{counter}{ext}"
         counter += 1
 
     try:
@@ -1867,6 +1922,53 @@ async def save_file(request: SaveFileRequest):
     except Exception as e:
         logger.error(f"Error saving file from {file_url}: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to save file: {e}")
+
+class SVSGenerateRequest(BaseModel):
+    file_url: str
+    instrument: str = "other"
+    lyrics: str
+
+@app.post("/svs/generate")
+async def svs_generate(request: SVSGenerateRequest):
+    """
+    Starts the SVS extraction and synthesis pipeline in the background.
+    Returns a task_id for polling status.
+    """
+    file_path = request.file_url
+
+    # Convert frontend URL or absolute path to local path
+    import urllib.parse
+    parsed = urllib.parse.urlparse(file_path)
+    
+    if "path=" in parsed.query:
+        query_params = urllib.parse.parse_qs(parsed.query)
+        local_path = query_params["path"][0]
+    elif file_path.startswith("/uploads/"):
+        local_path = str(UPLOAD_DIR / Path(parsed.path).name)
+    else:
+        local_path = file_path
+
+    if not Path(local_path).exists():
+        raise HTTPException(status_code=404, detail=f"Source file not found at {local_path}")
+
+    # Start non-blocking task
+    task_id = await svs_service.start_extraction_task(
+        str(local_path), 
+        request.instrument, 
+        request.lyrics
+    )
+    return {"task_id": task_id}
+
+@app.get("/svs/status/{task_id}")
+async def svs_status(task_id: str):
+    """
+    Polls the status of an SVS generation task.
+    """
+    status = svs_service.get_task_status(task_id)
+    if not status:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return status
+
 
 if __name__ == "__main__":
     import uvicorn

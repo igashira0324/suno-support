@@ -15,9 +15,10 @@ const SYSTEM_INSTRUCTION = `
 1. **提供されたURLのメタデータ（タイトル、アーティスト、説明文）を最優先で分析対象とします。**これらはAPIを使わずに取得できる情報です。
 2. 検索エンジン（Google Search等）の使用は、ユーザーが明示的に許可した場合に限ります。URLがある場合は、そのURLから推測される情報を「正解」として扱ってください。
 
-## 音楽解析のポイント
-- 特定した楽曲の「ジャンル（例：Dark EDM, Phonk, J-Pop）」「BPM/テンポ感」「使用されている特徴的な楽器」「ボーカルの雰囲気」をメタデータから推測・分析してください。
-- Suno v4.5の特性を活かしたプロンプトを作成してください。
+## 音楽解析とプロンプト生成のポイント（Suno & ACE-Step対応）
+- 特定した楽曲の「ジャンル（例：Dark EDM, Phonk, J-Pop）」「BPM/テンポ感」「使用されている特徴的な楽器」「ボーカルの雰囲気」「全体的なムード」をメタデータから推測・分析してください。
+- Suno v4.5（カンマ区切りのタグに強い）と、**ACE-Step v1.5（自然言語での詳細な情景描写に強い）**の両方の特性を活かしたプロンプトを作成してください。
+- **ACE-Step v1.5向けのスタイルプロンプトは、単なるカンマ区切りではなく、完全な英語の文章（2〜3文）による詳細な楽曲描写（テンポ、楽器構成、ボーカル音質、ムードの文脈的説明）が非常に有効です。**（例："An energetic J-pop track driven by rapid piano arpeggios that create a constant sense of motion alongside a punchy electronic drum beat..."）
 
 ## 構成ルール
 - [Intro], [Verse], [Chorus], [Bridge], [Drop], [Outro] などのメタタグを使用。
@@ -27,6 +28,56 @@ const SYSTEM_INSTRUCTION = `
 - **「日本語タイトル / English Title」** の形式で出力してください。必ず日本語と英語を併記してください。
 `;
 
+const continuityNotesSchema = {
+    type: Type.OBJECT,
+    properties: {
+        character: { type: Type.STRING, description: "キャラクターの外見・衣装の連続性" },
+        color_shift: { type: Type.STRING, description: "前のシーンからの色調変化" },
+        key_object_carry: { type: Type.STRING, description: "シーン間で引き継ぐ重要なオブジェクト" },
+    },
+    required: ["character", "color_shift", "key_object_carry"],
+};
+
+const sceneSchema = {
+    type: Type.OBJECT,
+    properties: {
+        scene_number: { type: Type.INTEGER },
+        scene_name: { type: Type.STRING },
+        timestamp: { type: Type.STRING, description: "e.g. 0s - 10s" },
+        section: { type: Type.STRING, description: "e.g. Intro, Verse 1, Chorus" },
+        lyrics_excerpt: { type: Type.STRING },
+        prompt_en: { type: Type.STRING, description: "English visual prompt for i2v generation" },
+        camera: { type: Type.STRING, description: "e.g. slow zoom, tracking shot, pan" },
+        effect: { type: Type.STRING, description: "e.g. lens flare, particle effects" },
+        color_palette: { type: Type.STRING, description: "e.g. deep purple, neon cyan" },
+        genspark_prompt: { type: Type.STRING, description: "Rich static image prompt (3+ sentences) integrating prompt_en + color_palette + static effects + '16:9 cinematic composition.' No camera movement terms." },
+        continuity_notes: continuityNotesSchema,
+        mood: { type: Type.STRING, description: "Scene mood/atmosphere in English only (e.g. 'Melancholic, mysterious', 'Energetic, triumphant'). Never use Japanese." },
+    },
+    required: ["scene_number", "scene_name", "timestamp", "section", "lyrics_excerpt", "prompt_en", "camera", "effect", "color_palette", "genspark_prompt", "continuity_notes", "mood"],
+};
+
+const timelineSchema = {
+    type: Type.OBJECT,
+    properties: {
+        scenes: { type: Type.ARRAY, items: sceneSchema },
+        evaluation_criteria: {
+            type: Type.OBJECT,
+            properties: {
+                must_include: { type: Type.STRING, description: "全体を通して必須のビジュアル要素" },
+                style_consistency: { type: Type.STRING, description: "e.g. Dark cyberpunk aesthetic throughout" },
+                color_evolution: { type: Type.ARRAY, items: { type: Type.STRING }, description: "色調の変遷 e.g. [dark blue, neon purple, warm gold]" },
+                aspect_ratio: { type: Type.STRING, description: "e.g. 16:9" },
+                negative_prompt: { type: Type.STRING, description: "生成を避けるべき要素" },
+                quality_threshold: { type: Type.INTEGER },
+                max_retries: { type: Type.INTEGER },
+            },
+            required: ["must_include", "style_consistency", "color_evolution", "aspect_ratio", "negative_prompt", "quality_threshold", "max_retries"],
+        },
+    },
+    required: ["scenes", "evaluation_criteria"],
+};
+
 const selectionSchema = {
     type: Type.OBJECT,
     properties: {
@@ -35,8 +86,9 @@ const selectionSchema = {
         instrumental: { type: Type.BOOLEAN },
         content: { type: Type.STRING, description: "v4.5メタタグを使用した完全な歌詞または構成" },
         comment: { type: Type.STRING, description: "音楽的な選択についての簡潔な説明。**必ず日本語で記述すること。**" },
+        timeline: timelineSchema,
     },
-    required: ["title", "style", "instrumental", "content", "comment"],
+    required: ["title", "style", "instrumental", "content", "comment", "timeline"],
 };
 
 const responseSchema: Schema = {
@@ -51,7 +103,7 @@ const responseSchema: Schema = {
         styleCandidates: {
             type: Type.ARRAY,
             items: { type: Type.STRING },
-            description: "Exactly 5 different style prompts.",
+            description: "Exactly 5 different style prompts. 少なくとも2つはSuno向けの「カンマ区切りのタグ形式」、残りの3つはACE-Step v1.5向けの「完全な英語の文章（2〜3文）による詳細な楽曲描写（テンポ、楽器、ボーカル、ムードの文脈的説明）」を含めてください。",
         },
         bestSelection: { ...selectionSchema },
         alternativeSelection: { ...selectionSchema },
@@ -116,7 +168,7 @@ export const generateSunoPrompt = async (
     youtubeUrl: string,
     file: File | null,
     mode: GenerationMode = GenerationMode.AUTO,
-    options: { searchEngine: SearchEngine; modelName: string; enableVideoAnalysis?: boolean; lyricsLanguage?: string } = { searchEngine: 'google-grounding', modelName: 'gemini-2.5-flash', enableVideoAnalysis: false, lyricsLanguage: 'Japanese' },
+    options: { searchEngine: SearchEngine; modelName: string; enableVideoAnalysis?: boolean; lyricsLanguage?: string } = { searchEngine: 'google-grounding', modelName: 'gemini-3-flash-preview', enableVideoAnalysis: false, lyricsLanguage: 'Japanese' },
     theme: string = ""
 ): Promise<SunoResponse> => {
     try {
@@ -125,8 +177,8 @@ export const generateSunoPrompt = async (
 
         const genAI = new GoogleGenAI({ apiKey: apiKey });
 
-        // Use the model selected by user, default to gemini-2.5-flash
-        const modelName = options.modelName || "gemini-2.5-flash";
+        // Use the model selected by user, default to gemini-3-flash
+        const modelName = options.modelName || "gemini-3-flash-preview";
 
 
         const parts: any[] = [];
@@ -249,14 +301,14 @@ export const generateFromSelectedTitle = async (
     selectedTitle: string,
     originalAnalysis: string,
     styleCandidates: string[],
-    options: { modelName: string; lyricsLanguage?: string } = { modelName: 'gemini-2.5-flash', lyricsLanguage: 'Japanese' }
+    options: { modelName: string; lyricsLanguage?: string } = { modelName: 'gemini-3-flash-preview', lyricsLanguage: 'Japanese' }
 ): Promise<{ bestSelection: any; alternativeSelection: any; tokenUsage?: any }> => {
     try {
         const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY;
         if (!apiKey) throw new Error("API Key is missing.");
 
         const genAI = new GoogleGenAI({ apiKey: apiKey });
-        const modelName = options.modelName || "gemini-2.5-flash";
+        const modelName = options.modelName || "gemini-3-flash-preview";
 
         let prompt = `
 // ... (omitted)
@@ -265,7 +317,7 @@ export const generateTitle = async (
     lyrics: string,
     theme: string,
     prompt: string,
-    modelName: string = 'gemini-2.5-flash'
+    modelName: string = 'gemini-3-flash-preview'
 ): Promise<string> => {
 ## タスク
 以下の分析結果と選択されたタイトルに基づいて、Suno v4.5用の楽曲プロンプトを2パターン生成してください。
@@ -283,6 +335,65 @@ ${styleCandidates.join('\n')}
 - bestSelection: 選択されたタイトルに最も適したスタイルと歌詞を生成
 - alternativeSelection: 同じタイトルで異なるアプローチ（変化球）を提案
 - commentは必ず日本語で記述すること
+
+## MV Scene Prompts (Timeline) 生成ルール（必須）
+各selectionに必ず "timeline" オブジェクトを含めてください。
+
+### タイムライン構成:
+- 楽曲の構成（Intro/Verse/Chorus/Bridge/Outro等）に合わせて**8〜15シーン**を生成
+- 各シーンのtimestampは短い文字列（e.g. "0s - 10s"）で、Intro は短く（3-10秒）、Verse/Chorus は長く（15-30秒）に設定すること
+
+### 各シーンの必須フィールド:
+- **prompt_en**: 英語のビジュアルプロンプト（i2v生成エンジン用）。映画的で具体的な描写（e.g. "A silhouette walks through neon-lit rain, dramatic lighting, cold blue glow"）を含むこと
+- **camera**: カメラワーク（e.g. slow zoom, tracking shot, close-up）。これはi2v動画生成エンジンで使用されるため最重要
+- **genspark_prompt**: 簡潔なGenspark用プロンプト。Continuity Notesは絶対に含めないこと
+- **continuity_notes**: 映像間の一貫性を保証する際の基準となるため、前のシーンからの引き継ぎ情報を記述
+
+### Genspark Promptの生成ルール（最重要・厳守）:
+genspark_prompt は画像生成AIに渡す最終プロンプトです。以下の4要素を統合した、高品質な静止画プロンプトを生成してください。
+
+**統合する情報源（必須）:**
+1. prompt_en の描写内容（メインの情報源として完全に流用）
+2. color_palette の色情報（明示的に色調を記述）
+3. effect のうち静的な視覚効果のみ（rain, glow, particles, lens flare 等はOK）
+4. 末尾に必ず "16:9 cinematic composition." を付加する
+
+**構図の表現（必須）:**
+- camera フィールドの動的表現を静止画の画角に変換すること
+  - wide shot, close-up, medium shot, low angle, high angle, over-the-shoulder 等で表現
+  - "slow zoom", "tracking", "pan", "dolly" 等の動きそのものは記述しない
+
+**最低品質基準（3文以上）:**
+- 第1文：被写体の外見的特徴と姿勢・表情の詳細描写
+- 第2文：背景/環境の詳細描写（場所、照明、雰囲気）
+- 第3文：色調・ライティング・静的エフェクトの指示 + 構図
+
+**良い例（3文構成）:**
+"A lone young woman with long dark hair and a flowing coat stands silhouetted against a vast, rain-slicked cyberpunk city at night. Neon signs reflect in puddles, casting deep blue and neon purple hues across the wet streets with subtle lens flare from distant signs. Deep blue, neon purple color grading with gentle rain particles throughout the scene. Wide shot, 16:9 cinematic composition."
+
+**絶対に含めてはいけない表現:**
+- カメラ移動: zoom, pan, tracking, dolly, crane, rotation, tilt, pull back
+- 編集手法: montage, quick cuts, rapid cuts, crossfade, transitions
+- 動的演出: slow motion, speed lines, animated
+
+**動画的シーン（モンタージュ等）の変換:**
+- prompt_en に "montage" や "quick cuts" が含まれていても、genspark_prompt では「その瞬間の最も印象的な1枚」に変換すること
+- 例: "Montage of quick cuts: crumbling city, resolute face" → "A resolute young woman stands amid a crumbling cityscape..."
+
+- Continuity Notes や Mood は絶対に含めないこと
+
+### evaluation_criteria:
+- must_include: 全体で必須のビジュアル要素（e.g. 「ネオンライト」「雨」）
+- style_consistency: 全体の統一スタイル（e.g. Dark cyberpunk aesthetic throughout）
+- color_evolution: 色調遷移を配列で記述（e.g. ["deep blue", "neon purple", "warm gold"]）
+- aspect_ratio: "16:9"
+- negative_prompt: 生成を避けるべき要素を記述。末尾にピリオドを含めないでください
+- quality_threshold: 7
+- max_retries: 2
+
+## mood フィールドの言語ルール（厳守）
+- mood は必ず**英語のみ**で記述すること（e.g. "Melancholic, mysterious", "Energetic, triumphant"）
+- 日本語（e.g. "孤独、絶望"）は使用禁止。後段のGemini評価パイプラインとの整合性のため、英語に統一する
 `;
 
         if (options.lyricsLanguage === 'English') {
@@ -331,7 +442,7 @@ export const generateTitle = async (
     lyrics: string,
     theme: string,
     prompt: string,
-    modelName: string = 'gemini-2.5-flash'
+    modelName: string = 'gemini-3-flash-preview'
 ): Promise<string> => {
     try {
         const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY;
@@ -438,7 +549,7 @@ export const structureLyrics = async (
     songDescription: string,
     theme: string,
     language: string = 'ja',
-    modelName: string = 'gemini-3.1-pro'
+    modelName: string = 'gemini-3-flash-preview'
 ): Promise<string> => {
 
     // === Pre-processing: Clean raw lyrics BEFORE sending to LLM ===
@@ -670,3 +781,45 @@ Output ONLY the structured lyrics text.`;
     }
 };
 
+
+export const generateStyleFromLyrics = async (
+    lyrics: string,
+    url: string = '',
+    theme: string = '',
+    language: string = 'ja',
+    modelName: string = 'gemini-3-flash-preview'
+): Promise<string> => {
+    try {
+        const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY;
+        if (!apiKey) throw new Error('API Key is missing.');
+        
+        // Dynamically import to avoid top-level await issues if any
+        const { GoogleGenAI } = await import('@google/genai');
+        const genAI = new GoogleGenAI({ apiKey: apiKey });
+
+        let userContent = 'Generate a Suno style prompt for this track.\n';
+        if (theme) userContent += 'Theme: ' + theme + '\n';
+        if (url) userContent += 'Reference URL: ' + url + '\n';
+        if (language === 'en') userContent += 'Language Focus: English\n';
+        else userContent += 'Language Focus: Japanese\n';
+        
+        if (lyrics) {
+            userContent += '\nLyrics (excerpt):\n---\n' + lyrics.substring(0, 800) + '\n---';
+        }
+
+        const result = await genAI.models.generateContent({
+            model: modelName,
+            contents: { parts: [{ text: userContent }] },
+            config: {
+                systemInstruction: 'Your task is to generate a highly effective "Style Prompt" (Song Description) for AI music generation. ACE-Step v1.5 strongly prefers detailed, natural language sentences over comma-separated tags. Output 2-3 sentences in English describing the genre, tempo, instrumentation, vocal style, and overall mood based on the inputs. No explanations or meta-text. e.g. "An energetic J-pop track driven by rapid piano arpeggios and punchy electronic drums. A clear female vocal delivers an uplifting melody..."',
+                temperature: 0.6,
+                maxOutputTokens: 100
+            }
+        });
+
+        return result.text || 'ERROR: Empty response';
+    } catch (e: any) {
+        console.error('Style generation failed:', e);
+        return 'ERROR: ' + (e.message || 'Unknown Error');
+    }
+};

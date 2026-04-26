@@ -1,15 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Play, Pause, Download, Music, AlertCircle, Loader2, FileAudio, Sparkles, Settings2, Languages, Clock, Layers, Image as ImageIcon, Upload, X, RefreshCw, Sliders, Mic, Merge, ArrowRight } from 'lucide-react';
 import { AceStepState, GenerationMode } from '../types';
-import { generateSunoPrompt, generateTitle, structureLyrics } from '../services/geminiService';
+import { generateSunoPrompt, generateTitle, structureLyrics, generateStyleFromLyrics } from '../services/geminiService';
 import WaveformPlayer from './WaveformPlayer';
 
 const AceStepTab: React.FC = () => {
     const [state, setState] = useState<AceStepState>({
         prompt: "A high-energy J-pop song with emotional piano and fast drums.",
         lyrics: "[Verse 1]\n空を見上げて 手をのばした\n届かない距離さえ 抱きしめて\n\n[Chorus]\n明日へ続く この道を行こう\n二度とない瞬間を 今きらめかせて",
-        thinking: false,
-        inference_steps: 8,
+        thinking: true,
+        inference_steps: 32,
         batch_size: 1,
         duration: -1,
         language: "ja",
@@ -43,7 +43,12 @@ const AceStepTab: React.FC = () => {
         autoTrim: true,
         fadeDuration: 3,
         useRandomSeed: true,
-        legoTrackName: 'vocals'
+        legoTrackName: 'vocals',
+        shift: 1.0,
+        guidance_scale: 7.0,
+        infer_method: 'ode',
+        startTime: undefined,
+        processingTime: undefined
     });
 
     const [visualProgress, setVisualProgress] = useState(0);
@@ -284,29 +289,46 @@ const AceStepTab: React.FC = () => {
             }
             const data = await res.json();
             if (data.lyrics) {
+                let currentPrompt = state.prompt;
+                if (data.prompt) {
+                    console.log('[LyricsExtract] Backend provided prompt:', data.prompt);
+                    currentPrompt = data.prompt;
+                }
+
                 // If it's from Suno, use it directly as requested by the user
                 if (data.method && data.method.startsWith('suno_')) {
                     console.log('[LyricsExtract] Suno direct lyrics - bypassing AI structuring');
-                    setState(prev => ({ ...prev, lyrics: data.lyrics, isExtractingLyrics: false }));
+                    setState(prev => ({ ...prev, lyrics: data.lyrics, prompt: currentPrompt, isExtractingLyrics: false }));
                     return;
                 }
 
                 // Step 2: Use Local LLM (or Gemini AI fallback) to clean up and add structure tags
                 console.log('[LyricsExtract] Raw lyrics received, length:', data.lyrics.length);
-                console.log('[LyricsExtract] Calling structureLyrics with prompt:', state.prompt?.substring(0, 50), 'theme:', state.theme?.substring(0, 50));
+                console.log('[LyricsExtract] Calling structureLyrics with prompt:', currentPrompt?.substring(0, 50), 'theme:', state.theme?.substring(0, 50));
                 try {
+                    let newPrompt = currentPrompt;
+                    if (!data.prompt || data.prompt.trim() === '') {
+                        console.log('[LyricsExtract] Generating new style prompt from lyrics...');
+                        const generatedStyle = await generateStyleFromLyrics(data.lyrics, url, state.theme, state.language);
+                        if (generatedStyle) {
+                            newPrompt = generatedStyle;
+                            console.log('[LyricsExtract] Generated Style:', generatedStyle);
+                        }
+                    }
+
+                    // 無料枠の同時アクセスを避けるため直列で処理
                     const structured = await structureLyrics(
                         data.lyrics,
-                        state.prompt,
+                        currentPrompt,
                         state.theme,
                         state.language
                     );
+
                     console.log('[LyricsExtract] Structured lyrics received, length:', structured.length);
-                    console.log('[LyricsExtract] First 100 chars:', structured.substring(0, 100));
-                    setState(prev => ({ ...prev, lyrics: structured, isExtractingLyrics: false }));
+                    setState(prev => ({ ...prev, lyrics: structured, prompt: newPrompt, isExtractingLyrics: false }));
                 } catch (aiErr) {
                     console.error('[LyricsExtract] AI structuring FAILED:', aiErr);
-                    setState(prev => ({ ...prev, lyrics: data.lyrics, isExtractingLyrics: false }));
+                    setState(prev => ({ ...prev, lyrics: data.lyrics, prompt: currentPrompt, isExtractingLyrics: false }));
                 }
             } else {
                 throw new Error('No lyrics could be extracted.');
@@ -415,7 +437,17 @@ const AceStepTab: React.FC = () => {
         // Reset state for new generation but keep title if it exists (or regenerate later)
         // If it's a new generation, we probably want a new title if the prompt changed?
         // Let's regenerate title every time to match the specific generation context
-        setState(prev => ({ ...prev, isGenerating: true, error: null, progress: 0, status: "starting", output_files: [], generatedTitle: undefined }));
+        setState(prev => ({
+            ...prev,
+            isGenerating: true,
+            error: null,
+            progress: 0,
+            status: "starting",
+            output_files: [],
+            generatedTitle: undefined,
+            startTime: Date.now(),
+            processingTime: undefined
+        }));
         setVisualProgress(0); // Reset visual progress bar
 
         // Fire title generation
@@ -510,7 +542,11 @@ const AceStepTab: React.FC = () => {
                 src_audio_path: srcAudioPath,
                 use_adg: state.useAdg,
                 reference_audio_path: (state.useAdg && srcAudioPath) ? srcAudioPath : null,
-                track_name: state.task_type === 'lego' ? state.legoTrackName : undefined
+                theme: state.theme.trim(),
+                track_name: state.task_type === 'lego' ? state.legoTrackName : undefined,
+                shift: state.shift,
+                guidance_scale: state.guidance_scale,
+                infer_method: state.infer_method
             };
 
             const response = await fetch("http://localhost:8100/acestep/generate", {
@@ -564,7 +600,13 @@ const AceStepTab: React.FC = () => {
 
                 if (data.status === "completed" || data.status === "failed") {
                     if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-                    setState(prev => ({ ...prev, isGenerating: false }));
+                    setState(prev => ({
+                        ...prev,
+                        isGenerating: false,
+                        processingTime: (data.status === "completed" && prev.startTime)
+                            ? (Date.now() - prev.startTime) / 1000
+                            : prev.processingTime
+                    }));
 
                     // Trigger post-processing if Repaint + AutoTrim is enabled
                     if (data.status === "completed" && state.task_type === 'repaint' && state.autoTrim && data.output_files && data.output_files.length > 0) {
@@ -1387,6 +1429,94 @@ const AceStepTab: React.FC = () => {
                                     </div>
                                 </div>
 
+                                {/* Advanced Settings Accordion */}
+                                <details className="group pt-2 border-t border-white/5 cursor-pointer">
+                                    <summary className="flex items-center justify-between outline-none pb-2 marker:content-none select-none">
+                                        <div className="flex items-center gap-2">
+                                            <Sliders className="w-3.5 h-3.5 text-slate-500 group-open:text-emerald-400 transition-colors" />
+                                            <span className="text-xs font-bold text-slate-300 group-open:text-emerald-300">Advanced Inference / 高度な設定</span>
+                                        </div>
+                                        <svg className="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                                    </summary>
+                                    <div className="pt-3 pb-2 space-y-5 cursor-default border-t border-white/5 mt-1" onClick={e => e.stopPropagation()}>
+                                        <div className="flex gap-2 bg-slate-900/80 p-1 rounded-xl">
+                                            <button 
+                                                onClick={(e) => { e.preventDefault(); setState(prev => ({ ...prev, shift: prev.model.includes('turbo') ? 3.0 : 1.0, guidance_scale: 7.0, infer_method: 'ode' })); }} 
+                                                className="flex-1 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all duration-300 hover:bg-emerald-500/20 text-emerald-400"
+                                                type="button"
+                                            >
+                                                Default Preset
+                                            </button>
+                                            <button 
+                                                onClick={(e) => { e.preventDefault(); setState(prev => ({ ...prev, shift: prev.model.includes('turbo') ? 4.0 : 1.5, guidance_scale: 8.5, infer_method: 'sde' })); }} 
+                                                className="flex-1 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all duration-300 hover:bg-emerald-500/20 text-emerald-400"
+                                                type="button"
+                                            >
+                                                High Quality Preset
+                                            </button>
+                                        </div>
+                                        
+                                        <div className="space-y-2">
+                                            <div className="flex items-center justify-between">
+                                                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-1.5">
+                                                    Shift Factor
+                                                    <div className="group/tips relative">
+                                                        <AlertCircle className="w-3 h-3 text-slate-600 hover:text-slate-400 cursor-help" />
+                                                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 p-2 bg-slate-800 text-[9px] text-slate-300 rounded-lg opacity-0 invisible group-hover/tips:opacity-100 group-hover/tips:visible transition-all pointer-events-none z-50 border border-white/5 shadow-xl">
+                                                            Turbo model requires Shift &gt;= 3.0 (default 3). Base model can use 1.0. Higher shift accelerates convergence but may affect quality mapping.
+                                                        </div>
+                                                    </div>
+                                                </label>
+                                                <span className="text-[10px] font-mono text-emerald-400 font-bold">{state.shift.toFixed(1)}</span>
+                                            </div>
+                                            <input
+                                                type="range" min="1.0" max="5.0" step="0.1"
+                                                value={state.shift}
+                                                onChange={(e) => setState(prev => ({ ...prev, shift: parseFloat(e.target.value) }))}
+                                                className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+                                            />
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <div className="flex items-center justify-between">
+                                                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-1.5">
+                                                    Guidance Scale
+                                                    <div className="group/tips relative">
+                                                        <AlertCircle className="w-3 h-3 text-slate-600 hover:text-slate-400 cursor-help" />
+                                                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 p-2 bg-slate-800 text-[9px] text-slate-300 rounded-lg opacity-0 invisible group-hover/tips:opacity-100 group-hover/tips:visible transition-all pointer-events-none z-50 border border-white/5 shadow-xl">
+                                                            CFG scale. Default is 7.0 for Base. Higher values follow lyrics/prompts more closely but can reduce audio fidelity if too high.
+                                                        </div>
+                                                    </div>
+                                                </label>
+                                                <span className="text-[10px] font-mono text-emerald-400 font-bold">{state.guidance_scale.toFixed(1)}</span>
+                                            </div>
+                                            <input
+                                                type="range" min="1.0" max="15.0" step="0.1"
+                                                value={state.guidance_scale}
+                                                onChange={(e) => setState(prev => ({ ...prev, guidance_scale: parseFloat(e.target.value) }))}
+                                                className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+                                            />
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Inference Method</label>
+                                            <div className="relative">
+                                                <select
+                                                    value={state.infer_method}
+                                                    onChange={(e) => setState(prev => ({ ...prev, infer_method: e.target.value as 'ode' | 'sde' }))}
+                                                    className="w-full bg-slate-900 border border-white/5 rounded-xl px-4 py-2.5 text-slate-200 appearance-none focus:ring-2 focus:ring-emerald-500/50 outline-none text-xs font-bold cursor-pointer"
+                                                >
+                                                    <option value="ode">ODE (Default / Fast)</option>
+                                                    <option value="sde">SDE (Slower / High Diversity)</option>
+                                                </select>
+                                                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500">
+                                                    <svg width="10" height="6" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M1 1L5 5L9 1" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </details>
+
                                 {/* Seed Input */}
                                 <div className="space-y-3 pt-2 border-t border-white/5">
                                     <div className="flex items-center justify-between">
@@ -1607,6 +1737,11 @@ const AceStepTab: React.FC = () => {
                                             <div className="flex items-center gap-2">
                                                 <span className="text-[9px] text-slate-500 font-black uppercase tracking-[0.2em] bg-slate-900/80 px-2 py-1 rounded border border-white/5">{item.dit_model || state.model}</span>
                                                 <span className="text-[9px] text-slate-500 font-black uppercase tracking-[0.2em] bg-slate-900/80 px-2 py-1 rounded border border-white/5">SEED: {item.seed_value?.split(',')[idx] || '####'}</span>
+                                                {state.processingTime && (
+                                                    <span className="text-[9px] text-amber-500/80 font-black uppercase tracking-[0.2em] bg-slate-900/80 px-2 py-1 rounded border border-amber-500/20 flex items-center gap-1">
+                                                        ⏱️ {state.processingTime.toFixed(1)}s
+                                                    </span>
+                                                )}
                                             </div>
                                         </div>
 
@@ -1615,6 +1750,7 @@ const AceStepTab: React.FC = () => {
                                                 src={item.url}
                                                 title={state.generatedTitle || `${state.prompt.replace(/,/g, '').slice(0, 20)}...`}
                                                 subtitle={`Variation ${idx + 1}`}
+                                                theme={state.theme}
                                             />
                                         </div>
                                     </div>
@@ -1814,9 +1950,10 @@ const AceStepTab: React.FC = () => {
                                                             )}
                                                         </div>
                                                         <WaveformPlayer
-                                                            src={voiceChange.mergedUrl}
-                                                            title="Voice Changed Result"
-                                                            subtitle="Merged Output"
+                                                            src={voiceChange.mergedUrl!}
+                                                            title={`Voice Changed: ${state.theme || 'Untitled'}`}
+                                                            subtitle="Final Output"
+                                                            theme={state.theme}
                                                         />
                                                         <a
                                                             href={voiceChange.mergedUrl}

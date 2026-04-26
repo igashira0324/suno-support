@@ -6,10 +6,11 @@ import ResultSection from './components/ResultSection';
 import YuEGenerationTab from './components/YuEGenerationTab';
 import AceStepTab from './components/AceStepTab';
 import MvProductionTab from './components/MvProductionTab';
-import { AudioWaveform as Waveform, Sparkles, AlertCircle, Wand2, Music, Settings, Info, Video } from 'lucide-react';
+import VocalStudioTab from './components/VocalStudioTab';
+import { AudioWaveform as Waveform, Sparkles, AlertCircle, Wand2, Music, Settings, Info, Video, AudioLines } from 'lucide-react';
 
 const App: React.FC = () => {
-    const [activeTab, setActiveTab] = useState<'prompt' | 'yue' | 'ace' | 'mv'>('prompt');
+    const [activeTab, setActiveTab] = useState<'prompt' | 'yue' | 'ace' | 'mv' | 'vocal'>('vocal');
     const [state, setState] = useState<AppState>({
         inputText: '',
         youtubeUrl: '',
@@ -20,7 +21,7 @@ const App: React.FC = () => {
         result: null,
         error: null,
         searchEngine: 'google-grounding',
-        modelName: 'gemini-2.5-flash',
+        modelName: 'gemini-3-flash-preview',
         enableVideoAnalysis: false,
         lyricsLanguage: 'Japanese',
     });
@@ -210,6 +211,16 @@ const App: React.FC = () => {
                             <Video className="w-4 h-4" />
                             MV Support
                         </button>
+                        <button
+                            onClick={() => setActiveTab('vocal')}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'vocal'
+                                ? 'bg-fuchsia-600 text-white shadow-lg shadow-fuchsia-500/20'
+                                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                                }`}
+                        >
+                            <AudioLines className="w-4 h-4" />
+                            Vocal Studio
+                        </button>
                     </nav>
 
                     <div className="hidden md:flex items-center gap-4">
@@ -268,6 +279,9 @@ const App: React.FC = () => {
                 </div>
                 <div style={{ display: activeTab === 'mv' ? 'block' : 'none' }}>
                     <MvProductionTab />
+                </div>
+                <div style={{ display: activeTab === 'vocal' ? 'block' : 'none' }}>
+                    <VocalStudioTab />
                 </div>
             </main>
 

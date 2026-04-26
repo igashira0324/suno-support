@@ -16,3 +16,5 @@ soundfile
 yt-dlp
 pedalboard
 matchering
+pretty_midi
+basic-pitch

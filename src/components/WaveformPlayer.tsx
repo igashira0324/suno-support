@@ -6,9 +6,10 @@ interface WaveformPlayerProps {
     src: string;
     title?: string;
     subtitle?: string;
+    theme?: string;
 }
 
-const WaveformPlayer: React.FC<WaveformPlayerProps> = ({ src, title, subtitle }) => {
+const WaveformPlayer: React.FC<WaveformPlayerProps> = ({ src, title, subtitle, theme }) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const wavesurfer = useRef<WaveSurfer | null>(null);
     const [isPlaying, setIsPlaying] = useState(false);
@@ -95,7 +96,9 @@ const WaveformPlayer: React.FC<WaveformPlayerProps> = ({ src, title, subtitle })
                     "Content-Type": "application/json",
                 },
                 body: JSON.stringify({
-                    file_url: src
+                    file_url: src,
+                    theme: theme,
+                    title: title
                 }),
             });
 
