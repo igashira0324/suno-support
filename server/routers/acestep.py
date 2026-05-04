@@ -268,20 +268,30 @@ from urllib.parse import quote
 
 def normalize_acestep_audio_url(raw_url: str) -> str:
     """
-    Normalizes ACE-Step audio URLs to absolute URLs.
-    Example: /v1/audio?path=... -> http://127.0.0.1:8101/v1/audio?path=...
+    Normalize ACE-Step audio output into playable absolute URL.
+    Supports: http://..., /v1/audio?path=..., and local filesystem paths.
     """
     if not raw_url:
         return ""
-    if raw_url.startswith("http"):
+
+    raw_url = str(raw_url).strip()
+    base_url = getattr(settings, "acestep_api_url", "http://127.0.0.1:8101").rstrip("/")
+
+    if raw_url.startswith(("http://", "https://")):
         return raw_url
-    
-    # ACE-Step base URL from settings or default
-    base_url = getattr(settings, "acestep_api_url", "http://127.0.0.1:8101")
-    
-    if raw_url.startswith("/"):
+
+    if raw_url.startswith("/v1/audio"):
         return f"{base_url}{raw_url}"
-    return f"{base_url}/{raw_url}"
+
+    if raw_url.startswith("v1/audio"):
+        return f"{base_url}/{raw_url}"
+
+    # Windows absolute path or normal filesystem path
+    if re.match(r"^[A-Za-z]:\\", raw_url) or raw_url.startswith("/"):
+        return f"{base_url}/v1/audio?path={quote(raw_url, safe='')}"
+
+    # Fallback: treat as ACE-Step audio path
+    return f"{base_url}/v1/audio?path={quote(raw_url, safe='')}"
 
 @router.post("/generate")
 async def acestep_generate(request: AceStepRequest):
@@ -353,46 +363,80 @@ async def get_acestep_status(task_id: str):
     
     # Normalize output files for frontend
     output_files = []
+
     if status == "completed":
         res_data = result.get("result")
-        
-        # ACE-Step result can be a JSON string, a list, or a dict
-        files = []
-        
+
         if isinstance(res_data, str):
             try:
                 res_data = json.loads(res_data)
-            except:
-                pass
-                
+            except Exception as e:
+                logger.warning(f"Failed to parse ACE-Step result JSON: {e}, raw={res_data[:500] if isinstance(res_data, str) else res_data}")
+
+        files = []
+
         if isinstance(res_data, list):
-            # Format: ["/v1/audio?path=...", ...]
             files = res_data
+
         elif isinstance(res_data, dict):
-            if "data" in res_data and isinstance(res_data["data"], dict):
-                files = res_data["data"].get("output_files", [])
+            if "data" in res_data:
+                data = res_data["data"]
+
+                if isinstance(data, list):
+                    files = data
+                elif isinstance(data, dict):
+                    files = (
+                        data.get("output_files")
+                        or data.get("files")
+                        or data.get("audios")
+                        or []
+                    )
+
             elif "output_files" in res_data:
-                files = res_data.get("output_files", [])
+                files = res_data.get("output_files") or []
+
+            elif "files" in res_data:
+                files = res_data.get("files") or []
+
             elif "merged_url" in res_data:
-                # Custom local task result
                 output_files.append({
-                    "url": res_data["merged_url"],
+                    "url": normalize_acestep_audio_url(res_data["merged_url"]),
                     "label": "Merged Output"
                 })
-        
+
+            else:
+                # Single dict output case
+                files = [res_data]
+
         for f in files:
+            raw = None
+            label = "Generated Audio"
+
             if isinstance(f, str):
-                url = normalize_acestep_audio_url(f)
+                raw = f
+
+            elif isinstance(f, dict):
+                raw = (
+                    f.get("url")
+                    or f.get("file")
+                    or f.get("audio_url")
+                    or f.get("audio")
+                    or f.get("path")
+                    or f.get("output")
+                )
+                label = f.get("label") or f.get("name") or f.get("filename") or label
+
+            if raw:
                 output_files.append({
-                    "url": url,
-                    "label": "Generated Audio"
+                    "url": normalize_acestep_audio_url(str(raw)),
+                    "label": label
                 })
-            elif isinstance(f, dict) and "url" in f:
-                url = normalize_acestep_audio_url(f["url"])
-                output_files.append({
-                    "url": url,
-                    "label": f.get("label", "Generated Audio")
-                })
+
+        if not output_files:
+            logger.error(
+                f"ACE-Step completed but no output files parsed. "
+                f"task_id={task_id}, raw_result={result.get('result')}"
+            )
 
     logger.debug(f"Task {task_id} status: {status}, files: {len(output_files)}")
 
