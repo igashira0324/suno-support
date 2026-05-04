@@ -94,23 +94,16 @@ export const aceStepApi = {
   },
 
   /**
+   * Start voice conversion task
+   */
+  voiceConvert: async (formData: FormData) => {
+    return apiClient.upload<{ task_id: string }>('/acestep/voice-convert', formData);
+  },
+
+  /**
    * Get generic task status
    */
   getTaskStatus: async (taskId: string) => {
     return apiClient.get<any>(`/task/${taskId}`);
-  },
-
-  /**
-   * Start separation from URL (generated file)
-   */
-  separateGenerated: async (fileUrl: string) => {
-    return apiClient.post<{ task_id: string }>('/acestep/separate-generated', { file_url: fileUrl });
-  },
-
-  /**
-   * Save file to results
-   */
-  saveFile: async (fileUrl: string, title?: string, theme?: string) => {
-    return apiClient.post<any>('/acestep/save_file', { file_url: fileUrl, title, theme });
   }
 };

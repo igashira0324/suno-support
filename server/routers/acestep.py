@@ -266,146 +266,137 @@ async def generate_minimax(request: MinimaxRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/status/{task_id}")
-async def acestep_status(task_id: str):
-    if task_id in tasks: return tasks[task_id]
+async def get_acestep_status(task_id: str):
+    """
+    Get the status of an ACE-Step task with normalized output files.
+    """
     result = acestep_service.query_result(task_id)
-    status_map = {0: "processing", 1: "completed", 2: "failed"}
+    
+    if not result:
+        # Check local task store fallback
+        if task_id in tasks:
+            task = tasks[task_id]
+            return {
+                "task_id": task_id,
+                "status": task.get("status", "processing"),
+                "progress": task.get("progress", 0),
+                "output_files": task.get("output_files", []),
+                "result": task.get("result"),
+                "error": task.get("error"),
+            }
+        raise HTTPException(status_code=404, detail="Task not found")
+    
+    # Map status from external service
     raw_status = result.get("status")
+    if raw_status == 1:
+        status = "completed"
+    elif raw_status in [-1, 2]:
+        status = "failed"
+    else:
+        status = "processing"
+    
+    # Normalize output files for frontend
+    output_files = []
+    if status == "completed":
+        res_data = result.get("result")
+        # ACE-Step result can be a dict with 'data' containing 'output_files'
+        if isinstance(res_data, dict):
+            files = []
+            if "data" in res_data and isinstance(res_data["data"], dict):
+                files = res_data["data"].get("output_files", [])
+            elif "output_files" in res_data:
+                files = res_data.get("output_files", [])
+            elif "merged_url" in res_data:
+                # Merged URL already in result
+                output_files.append({
+                    "url": res_data["merged_url"],
+                    "label": "Merged Output"
+                })
+                files = [] # Skip loop below
+            
+            for f in files:
+                # Convert to web URL
+                output_files.append({
+                    "url": f"/outputs/acestep/{Path(f).name}",
+                    "label": "Generated Audio"
+                })
+
     return {
-        "task_id": task_id, "status": status_map.get(raw_status, "processing"),
-        "progress": 100 if raw_status == 1 else 0,
-        "result": result.get("result"), "error": result.get("error")
+        "task_id": task_id,
+        "status": status,
+        "progress": 100 if status == "completed" else 0,
+        "output_files": output_files,
+        "result": result.get("result"),
+        "error": result.get("error")
     }
 
 @router.post("/separate")
 async def acestep_separate(request: SeparateRequest, background_tasks: BackgroundTasks):
-    task_id = str(uuid.uuid4())
-    input_path = resolve_web_path(request.file_url)
-    if not input_path.exists(): raise HTTPException(status_code=404, detail="File not found")
-    tasks[task_id] = {"status": "queued", "progress": 0, "filename": input_path.name}
-    background_tasks.add_task(run_separation_task, task_id, input_path)
-    return {"status": "success", "task_id": task_id}
+    try:
+        local_path = resolve_web_path(request.file_url)
+        task_id = f"sep_{uuid.uuid4().hex[:8]}"
+        tasks[task_id] = {"status": "processing", "progress": 0, "type": "separation"}
+        background_tasks.add_task(run_separation_task, task_id, local_path)
+        return {"task_id": task_id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/voice-convert")
 async def acestep_voice_convert(
     background_tasks: BackgroundTasks,
     instrumental_url: str = Form(...),
     vocals_url: str = Form(...),
-    original_url: str = Form(None),
-    reference_audio: UploadFile = File(...),
+    reference_file: UploadFile = File(...),
+    original_url: Optional[str] = Form(None),
     diffusion_steps: int = Form(50),
     f0_condition: bool = Form(True),
     auto_f0_adjust: bool = Form(False),
     pitch_shift: int = Form(0)
 ):
-    task_id = str(uuid.uuid4())
-    inst_path = resolve_web_path(instrumental_url)
-    vox_path = resolve_web_path(vocals_url)
-    orig_path = resolve_web_path(original_url) if original_url else None
-    
-    ref_path = VC_DIR / task_id / f"ref_{reference_audio.filename}"
-    ref_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(ref_path, "wb") as f: f.write(await reference_audio.read())
-    
-    tasks[task_id] = {"status": "queued", "progress": 0, "filename": f"VC Merge ({reference_audio.filename})"}
-    background_tasks.add_task(run_voice_conversion_task, task_id, inst_path, vox_path, ref_path, orig_path, diffusion_steps, f0_condition, auto_f0_adjust, pitch_shift)
-    return {"status": "success", "task_id": task_id}
-
-@router.post("/extract-lyrics")
-async def acestep_extract_lyrics(request: ExtractLyricsRequest):
-    lyrics_text = None
-    prompt_text = None
-    method = None
-    
-    if request.url:
-        suno_match = re.search(r'suno\.com/song/([0-9a-fA-F-]{36})', request.url)
-        if suno_match:
-            song_id = suno_match.group(1)
-            # Try API endpoints first
-            for api_url in [f"https://studio-api.prod.suno.com/api/feed/?ids={song_id}", f"https://studio-api.suno.ai/api/feed/?ids={song_id}"]:
-                try:
-                    resp = requests.get(api_url, timeout=10)
-                    if resp.ok:
-                        data = resp.json()
-                        if data and isinstance(data, list):
-                            song_data = data[0]
-                            lyrics_text = song_data.get("metadata", {}).get("prompt")
-                            prompt_text = song_data.get("metadata", {}).get("tags")
-                            method = "suno_api"
-                            break
-                except: pass
-            
-            # Try Scraping
-            if not lyrics_text:
-                try:
-                    resp = requests.get(f"https://suno.com/song/{song_id}", timeout=10)
-                    if resp.ok:
-                        match = re.search(r'\"prompt\":\"(.*?)(?<!\\)\"', resp.text)
-                        if match:
-                            lyrics_text = match.group(1).replace('\\n', '\n').replace('\\"', '"')
-                            method = "suno_scrape"
-                except: pass
-
-    # Whisper fallback omitted here but should use same logic as main.py
-    return {"lyrics": lyrics_text or "No lyrics found", "prompt": prompt_text, "method": method}
-
-@router.post("/llm-proxy")
-async def acestep_llm_proxy(body: dict = Body(...)):
     try:
-        resp = requests.post("http://127.0.0.1:8080/v1/chat/completions", json=body, timeout=120)
-        resp.raise_for_status()
-        return resp.json()
+        inst_path = resolve_web_path(instrumental_url)
+        vox_path = resolve_web_path(vocals_url)
+        orig_path = resolve_web_path(original_url) if original_url else None
+        
+        ref_path = ACESTEP_SOURCE_DIR / f"ref_{uuid.uuid4().hex[:8]}{Path(reference_file.filename).suffix}"
+        with open(ref_path, "wb") as buffer:
+            shutil.copyfileobj(reference_file.file, buffer)
+            
+        task_id = f"vc_{uuid.uuid4().hex[:8]}"
+        tasks[task_id] = {"status": "processing", "progress": 0, "type": "voice_conversion"}
+        
+        background_tasks.add_task(
+            run_voice_conversion_task, 
+            task_id, inst_path, vox_path, ref_path, orig_path,
+            diffusion_steps, f0_condition, auto_f0_adjust, pitch_shift
+        )
+        return {"task_id": task_id}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/status/{task_id}")
-async def get_acestep_status(task_id: str):
-    """
-    Get the status of an ACE-Step task with normalized output files.
-    """
-    result = acestep_service.query_result(task_id)
-    if not result:
-        # Check task store fallback
-        if task_id in tasks:
-            return tasks[task_id]
-        raise HTTPException(status_code=404, detail="Task not found")
-    
-    # Map status
-    raw_status = result.get("status")
-    status = "processing"
-    if raw_status == 1:
-        status = "completed"
-    elif raw_status == -1:
-        status = "failed"
-    
-    # Normalize output files for frontend
-    output_files = []
-    if raw_status == 1:
-        res_data = result.get("result")
-        # ACE-Step result can be a dict with 'data' containing 'output_files'
-        if isinstance(res_data, dict):
-            if "data" in res_data:
-                files = res_data["data"].get("output_files", [])
-                for f in files:
-                    # Convert to web URL
-                    output_files.append({
-                        "url": f"/outputs/acestep/{Path(f).name}",
-                        "label": "Generated Audio"
-                    })
-            elif "merged_url" in res_data:
-                 output_files.append({
-                    "url": res_data["merged_url"],
-                    "label": "Merged Output"
-                })
+@router.post("/extract-lyrics")
+async def acestep_extract_lyrics(request: ExtractLyricsRequest):
+    try:
+        audio_path = None
+        if request.url:
+            audio_path = await download_audio_from_url(request.url, ACESTEP_SOURCE_DIR)
+        elif request.audio_path:
+            audio_path = resolve_web_path(request.audio_path)
+            
+        if not audio_path or not audio_path.exists():
+            raise HTTPException(status_code=404, detail="Audio file not found")
+            
+        import whisper_service
+        result = whisper_service.get_whisper_service().transcribe(str(audio_path), language=request.language)
+        return {"lyrics": result.get("text", ""), "segments": result.get("segments", [])}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
-    return {
-        "task_id": task_id,
-        "status": status,
-        "progress": 100 if raw_status == 1 else 0,
-        "output_files": output_files,
-        "result": result.get("result"),
-        "error": result.get("error")
-    }
+@router.post("/llm-proxy")
+async def acestep_llm_proxy(request: Request):
+    body = await request.json()
+    import gemini_service
+    return await gemini_service.llm_proxy(body)
 
 @router.post("/analyze")
 async def acestep_analyze(request: AnalyzeRequest):

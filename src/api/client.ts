@@ -4,7 +4,7 @@
  * Handles base URL configuration and provides common request patterns.
  */
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8100';
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8100';
 
 class ApiClient {
   private baseUrl: string;
@@ -100,8 +100,6 @@ class ApiClient {
     });
   }
 }
-
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8100';
 
 export const toApiUrl = (url?: string | null) => {
   if (!url) return '';

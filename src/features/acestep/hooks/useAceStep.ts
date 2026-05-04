@@ -114,7 +114,10 @@ export const useAceStep = () => {
                     ...prev,
                     status: currentStatus,
                     progress: progress,
-                    output_files: data.output_files || [],
+                    output_files: (data.output_files || []).map((file: any) => ({
+                        ...file,
+                        url: toApiUrl(file.url)
+                    })),
                     error: currentStatus === "failed" ? (data.error || "Generation failed") : null
                 }));
 
@@ -307,7 +310,7 @@ export const useAceStep = () => {
         }
         setState(prev => ({ ...prev, isExtractingLyrics: true, error: null }));
         try {
-            const data = await acestepApi.extractLyrics(url);
+            const data = await acestepApi.extractLyrics({ url, language: state.language });
             if (data.lyrics) {
                 let currentPrompt = data.prompt || state.prompt;
                 if (data.method?.startsWith('suno_')) {
