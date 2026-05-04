@@ -10,11 +10,11 @@ export const useAceStep = () => {
         prompt: "A high-energy J-pop song with emotional piano and fast drums.",
         lyrics: "[Verse 1]\n空を見上げて 手をのばした\n届かない距離さえ 抱きしめて\n\n[Chorus]\n明日へ続く この道を行こう\n二度とない瞬間を 今きらめかせて",
         thinking: true,
-        inference_steps: 32,
+        inference_steps: 8,
         batch_size: 1,
         duration: -1,
         language: "ja",
-        model: "acestep-v15-base",
+        model: "acestep-v15-turbo",
         sample_mode: false,
         sample_query: "",
         isGenerating: false,
@@ -128,11 +128,18 @@ export const useAceStep = () => {
                     setState(prev => {
                         const endTime = Date.now();
                         const pTime = prev.startTime ? (endTime - prev.startTime) / 1000 : undefined;
+                        const outputFiles = data.output_files || [];
                         
                         return {
                             ...prev,
                             isGenerating: false,
-                            processingTime: pTime
+                            processingTime: pTime,
+                            error:
+                                currentStatus === 'failed'
+                                    ? (data.error || 'Generation failed')
+                                    : outputFiles.length === 0
+                                        ? 'ACE-Step の生成は完了しましたが、音声ファイルURLを取得できませんでした。バックエンドの result パースを確認してください。'
+                                        : null
                         };
                     });
 

@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>ACE-Step 音楽生成機能 修正報告書</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <style>
+        :root {
+            --primary: #6366f1;
+            --bg: #0f172a;
+            --card: #1e293b;
+            --text: #f1f5f9;
+        }
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+            margin: 0;
+            padding: 40px;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: var(--primary);
+            border-bottom: 2px solid var(--primary);
+            padding-bottom: 10px;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+        .card {
+            background: var(--card);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .mermaid {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            margin: 20px 0;
+        }
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            background: var(--primary);
+            margin-right: 8px;
+        }
+        .animate-pulse {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .5; }
+        }
+        code {
+            background: #000;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: monospace;
+            color: #fb7185;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>ACE-Step Stability Fix Report</h1>
+        
+        <div class="card">
+            <h2><span class="badge">STATUS</span> 修正完了 / Optimized</h2>
+            <p>ACE-Step の音楽生成プロセスにおける通信エラーとレスポンス解析の不備を修正しました。これにより、生成された音声が正しくUIに表示され、再生可能になります。</p>
+        </div>
+
+        <div class="card">
+            <h2>修正のポイント</h2>
+            <ul>
+                <li><strong>モデルの同期:</strong> 起動スクリプトに合わせ <code>acestep-v15-turbo</code> をデフォルトに設定。</li>
+                <li><strong>URL 正規化:</strong> 相対パスを絶対 URL に自動変換し、再生エラーを防止。</li>
+                <li><strong>堅牢なパース:</strong> JSON 文字列/配列の両方のレスポンス形式に対応。</li>
+            </ul>
+        </div>
+
+        <div class="card">
+            <h2>システムシーケンス図</h2>
+            <div class="mermaid">
+                sequenceDiagram
+                    participant UI as Frontend
+                    participant BE as Backend (FastAPI)
+                    participant AS as ACE-Step API
+                    UI->>BE: 生成リクエスト (Turboモデル)
+                    BE->>AS: タスク発行
+                    Note over AS: 音楽生成中...
+                    loop ステータス確認
+                        UI->>BE: 進捗確認
+                        BE->>AS: query_result
+                        AS-->>BE: 完了 (JSON配列/文字列)
+                    end
+                    BE->>BE: URL正規化 (http://127.0.0.1:8101/...)
+                    BE-->>UI: 最終結果 (再生可能URL)
+                    UI-->>UI: プレイヤー表示
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>実行方法</h2>
+            <p>以下のバッチファイルを実行して、環境を最新状態で起動してください：</p>
+            <code>start_backend.cmd</code> (サーバー再起動が必要です)
+        </div>
+    </div>
+    <script>
+        mermaid.initialize({ startOnLoad: true, theme: 'default' });
+    </script>
+</body>
+</html>

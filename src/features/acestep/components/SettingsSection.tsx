@@ -95,8 +95,9 @@ export const SettingsSection: React.FC<SettingsSectionProps> = ({ state, setStat
                             onChange={(e) => setState(prev => ({ ...prev, model: e.target.value }))}
                             className="w-full bg-slate-950/80 border border-slate-800 rounded-lg px-3 py-2.5 text-[10px] font-bold text-slate-300 focus:outline-none focus:ring-1 focus:ring-indigo-500/50 transition-all"
                         >
-                            <option value="acestep-v15-base">ACE-Step v1.5 Base (高速・省メモリ)</option>
-                            <option value="acestep-v15-xl">ACE-Step v1.5 XL (高音質・表現力重視)</option>
+                            <option value="acestep-v15-turbo">ACE-Step v1.5 Turbo (推奨: 高速・高品質)</option>
+                            <option value="acestep-v15-base">ACE-Step v1.5 Base (省メモリ)</option>
+                            <option value="acestep-v15-xl">ACE-Step v1.5 XL (最高音質・表現力重視)</option>
                         </select>
                     </div>
 
@@ -134,7 +135,7 @@ export const SettingsSection: React.FC<SettingsSectionProps> = ({ state, setStat
                                 onChange={(e) => setState(prev => ({ ...prev, duration: parseInt(e.target.value) }))}
                                 className="w-full bg-slate-950/80 border border-slate-800 rounded-lg px-3 py-2 text-[10px] font-bold text-slate-300 focus:outline-none focus:ring-1 focus:ring-indigo-500/50"
                             >
-                                <option value={0}>Auto</option>
+                                <option value={-1}>Auto</option>
                                 <option value={30}>30 Seconds</option>
                                 <option value={60}>60 Seconds</option>
                                 <option value={90}>90 Seconds</option>

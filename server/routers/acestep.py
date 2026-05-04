@@ -43,6 +43,18 @@ logger = logging.getLogger("SunoArchitect.AceStep")
 
 router = APIRouter(prefix="/acestep", tags=["acestep"])
 
+@router.get("/health")
+async def acestep_health():
+    """
+    Proxy health check to the ACE-Step API Server (Port 8101).
+    Used by the frontend to prevent generating before models are loaded.
+    """
+    try:
+        r = requests.get(f"{acestep_service.ACESTEP_API_URL}/health", timeout=3)
+        return r.json()
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
 # Models
 class AceStepRequest(BaseModel):
     prompt: str = ""
@@ -252,8 +264,28 @@ async def acestep_download_url(request: Request):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+from urllib.parse import quote
+
+def normalize_acestep_audio_url(raw_url: str) -> str:
+    """
+    Normalizes ACE-Step audio URLs to absolute URLs.
+    Example: /v1/audio?path=... -> http://127.0.0.1:8101/v1/audio?path=...
+    """
+    if not raw_url:
+        return ""
+    if raw_url.startswith("http"):
+        return raw_url
+    
+    # ACE-Step base URL from settings or default
+    base_url = getattr(settings, "acestep_api_url", "http://127.0.0.1:8101")
+    
+    if raw_url.startswith("/"):
+        return f"{base_url}{raw_url}"
+    return f"{base_url}/{raw_url}"
+
 @router.post("/generate")
 async def acestep_generate(request: AceStepRequest):
+    logger.info(f"Starting ACE-Step generation: model={request.model}, type={request.task_type}, prompt={request.prompt[:50]}...")
     result = acestep_service.release_task(
         request.prompt, request.lyrics, thinking=request.thinking,
         inference_steps=request.inference_steps, batch_size=request.batch_size,
@@ -266,11 +298,13 @@ async def acestep_generate(request: AceStepRequest):
         reference_audio_path=request.reference_audio_path, track_name=request.track_name
     )
     if "error" in result and result["error"]:
+        logger.error(f"ACE-Step generation error: {result['error']}")
         raise HTTPException(status_code=500, detail=result["error"])
     
     # Normalize response shape for frontend
     # Expected: { "task_id": "..." }
     task_id = result.get("task_id") or (result.get("data", {}) if isinstance(result.get("data"), dict) else {}).get("task_id")
+    logger.info(f"ACE-Step task created: {task_id}")
     
     return {
         "task_id": task_id,
@@ -290,6 +324,7 @@ async def generate_minimax(request: MinimaxRequest):
 async def get_acestep_status(task_id: str):
     """
     Get the status of an ACE-Step task with normalized output files.
+    Robustly handles JSON string, list, and dictionary result formats.
     """
     result = acestep_service.query_result(task_id)
     
@@ -320,27 +355,46 @@ async def get_acestep_status(task_id: str):
     output_files = []
     if status == "completed":
         res_data = result.get("result")
-        # ACE-Step result can be a dict with 'data' containing 'output_files'
-        if isinstance(res_data, dict):
-            files = []
+        
+        # ACE-Step result can be a JSON string, a list, or a dict
+        files = []
+        
+        if isinstance(res_data, str):
+            try:
+                res_data = json.loads(res_data)
+            except:
+                pass
+                
+        if isinstance(res_data, list):
+            # Format: ["/v1/audio?path=...", ...]
+            files = res_data
+        elif isinstance(res_data, dict):
             if "data" in res_data and isinstance(res_data["data"], dict):
                 files = res_data["data"].get("output_files", [])
             elif "output_files" in res_data:
                 files = res_data.get("output_files", [])
             elif "merged_url" in res_data:
-                # Merged URL already in result
+                # Custom local task result
                 output_files.append({
                     "url": res_data["merged_url"],
                     "label": "Merged Output"
                 })
-                files = [] # Skip loop below
-            
-            for f in files:
-                # Convert to web URL
+        
+        for f in files:
+            if isinstance(f, str):
+                url = normalize_acestep_audio_url(f)
                 output_files.append({
-                    "url": f"/outputs/acestep/{Path(f).name}",
+                    "url": url,
                     "label": "Generated Audio"
                 })
+            elif isinstance(f, dict) and "url" in f:
+                url = normalize_acestep_audio_url(f["url"])
+                output_files.append({
+                    "url": url,
+                    "label": f.get("label", "Generated Audio")
+                })
+
+    logger.debug(f"Task {task_id} status: {status}, files: {len(output_files)}")
 
     return {
         "task_id": task_id,
