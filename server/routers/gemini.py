@@ -18,6 +18,24 @@ class PromptRequest(BaseModel):
     theme: str = ""
     image_path: Optional[str] = None
 
+@router.post("/upload-image")
+async def upload_image(file: UploadFile = File(...)):
+    try:
+        from core.config import settings
+        import shutil
+        import uuid
+        from pathlib import Path
+        
+        ext = Path(file.filename).suffix or ".jpg"
+        file_id = str(uuid.uuid4())
+        filepath = settings.upload_dir / f"img_{file_id}{ext}"
+        with open(filepath, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        return {"status": "success", "path": str(filepath.resolve())}
+    except Exception as e:
+        logger.error(f"Image upload failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.post("/generate-suno-prompt")
 async def generate_suno_prompt(request: PromptRequest):
     try:

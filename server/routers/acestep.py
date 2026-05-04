@@ -24,6 +24,21 @@ from core.state import tasks
 from core.utils import resolve_web_path, download_audio_from_url, parse_subtitle_to_lyrics, structure_whisper_output
 import acestep_service
 
+def to_web_path(path: Path) -> str:
+    try:
+        rel = path.relative_to(settings.upload_dir)
+        return f"/uploads/{rel.as_posix()}"
+    except ValueError:
+        pass
+
+    try:
+        rel = path.relative_to(settings.output_dir)
+        return f"/outputs/{rel.as_posix()}"
+    except ValueError:
+        pass
+
+    return str(path)
+
 logger = logging.getLogger("SunoArchitect.AceStep")
 
 router = APIRouter(prefix="/acestep", tags=["acestep"])
@@ -122,7 +137,7 @@ def run_separation_task(task_id: str, input_path: Path):
         tasks[task_id]["result"] = {
             "vocals_url": f"/outputs/separated/{task_id}/vocals.wav",
             "instrumental_url": f"/outputs/separated/{task_id}/instrumental.wav",
-            "original_path": f"/uploads/acestep_source/{input_path.name}"
+            "original_path": to_web_path(input_path)
         }
         tasks[task_id]["status"] = "completed"
         tasks[task_id]["progress"] = 100
@@ -146,10 +161,10 @@ def run_voice_conversion_task(
         from pedalboard import Pedalboard, Compressor, HighpassFilter, Reverb, PeakFilter
         import matchering as mg
         
+        if tasks[task_id].get("status") == "cancelled": return
+        
         tasks[task_id]["status"] = "processing"
         tasks[task_id]["progress"] = 5
-        
-        if tasks[task_id].get("status") == "cancelled": return
         
         seed_vc_dir = settings.project_dir / "seed-vc"
         output_dir = VC_DIR / task_id
@@ -369,6 +384,8 @@ async def acestep_separate_url(request: SeparateRequest, background_tasks: Backg
         tasks[task_id] = {"status": "processing", "progress": 0, "type": "separation"}
         background_tasks.add_task(run_separation_task, task_id, local_path)
         return {"task_id": task_id}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Separate URL error: {e}")
         raise HTTPException(status_code=500, detail=str(e))

@@ -13,7 +13,7 @@ export const generateSunoPrompt = async (
     try {
         let imagePath: string | undefined = undefined;
         if (file) {
-            const uploadRes = await aceStepApi.uploadSource(file);
+            const uploadRes = await geminiApi.uploadImage(file);
             imagePath = uploadRes.path;
         }
 

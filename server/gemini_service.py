@@ -132,22 +132,33 @@ async def generate_suno_prompt(
 
     prompt_parts.append(meta_prompt)
 
-    # Use JSON mode if search is not enabled
     generation_config = {
         "temperature": 0.2,
         "response_mime_type": "application/json"
     }
 
-    response = await model.generate_content_async(
-        prompt_parts,
-        generation_config=generation_config
-    )
-
-    try:
-        return json.loads(response.text)
-    except Exception as e:
-        logger.error(f"Failed to parse Gemini response: {e}")
-        return {"error": "Failed to parse AI response", "raw": response.text}
+    import asyncio
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            response = await model.generate_content_async(
+                prompt_parts,
+                generation_config=generation_config
+            )
+            return json.loads(response.text)
+        except json.JSONDecodeError as e:
+            logger.warning(f"JSON parse error on attempt {attempt + 1}: {e}. Retrying...")
+            if attempt == max_retries - 1:
+                logger.error(f"Failed to parse Gemini response after {max_retries} attempts")
+                return {"error": "Failed to parse AI response", "raw": response.text if 'response' in locals() else ""}
+            await asyncio.sleep(1)
+        except Exception as e:
+            logger.error(f"Gemini API error on attempt {attempt + 1}: {e}")
+            if attempt == max_retries - 1:
+                raise
+            await asyncio.sleep(2)
+    
+    return {"error": "Failed after max retries"}
 
 async def structure_lyrics(
     raw_lyrics: str,
@@ -210,19 +221,31 @@ async def generate_from_selected_title(
         "response_mime_type": "application/json"
     }
 
-    response = await model.generate_content_async(
-        prompt,
-        generation_config=generation_config
-    )
-
-    try:
-        data = json.loads(response.text)
-        data["bestSelection"]["title"] = selected_title
-        data["alternativeSelection"]["title"] = selected_title
-        return data
-    except Exception as e:
-        logger.error(f"Failed to parse Phase 2 response: {e}")
-        return {"error": "Failed to parse AI response", "raw": response.text}
+    import asyncio
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            response = await model.generate_content_async(
+                prompt,
+                generation_config=generation_config
+            )
+            data = json.loads(response.text)
+            data["bestSelection"]["title"] = selected_title
+            data["alternativeSelection"]["title"] = selected_title
+            return data
+        except json.JSONDecodeError as e:
+            logger.warning(f"Phase 2 JSON parse error on attempt {attempt + 1}: {e}. Retrying...")
+            if attempt == max_retries - 1:
+                logger.error(f"Failed to parse Phase 2 response after {max_retries} attempts")
+                return {"error": "Failed to parse AI response", "raw": response.text if 'response' in locals() else ""}
+            await asyncio.sleep(1)
+        except Exception as e:
+            logger.error(f"Phase 2 API error on attempt {attempt + 1}: {e}")
+            if attempt == max_retries - 1:
+                raise
+            await asyncio.sleep(2)
+            
+    return {"error": "Failed after max retries"}
 
 async def generate_title(
     lyrics: str,

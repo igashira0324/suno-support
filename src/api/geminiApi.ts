@@ -2,6 +2,12 @@ import { apiClient } from './client';
 import { SunoResponse, GenerationMode, SearchEngine } from '../types';
 
 export const geminiApi = {
+    uploadImage: async (file: File): Promise<{ status: string; path: string }> => {
+        const formData = new FormData();
+        formData.append('file', file);
+        return apiClient.upload('/gemini/upload-image', formData);
+    },
+
     generateSunoPrompt: async (params: {
         text: string;
         youtube_url: string;

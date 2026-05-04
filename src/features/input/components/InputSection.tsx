@@ -1,5 +1,5 @@
 import React, { useRef, useState, useMemo } from 'react';
-import { MediaType, GenerationMode } from '../types';
+import { MediaType, GenerationMode } from '../../../types';
 import { Music, Image as ImageIcon, Video, X, Wand2, Mic2, MicOff, Sparkles, Search, SearchX, AlertTriangle } from 'lucide-react';
 
 interface InputSectionProps {

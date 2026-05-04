@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { SunoResponse, AppState, MediaType, GenerationMode } from './types';
 import { generateSunoPrompt } from './services/geminiService';
-import InputSection from './components/InputSection';
-import ResultSection from './components/ResultSection';
+import InputSection from './features/input/components/InputSection';
+import ResultSection from './features/results/components/ResultSection';
 import YuEGenerationTab from './components/YuEGenerationTab';
 import AceStepTab from './components/AceStepTab';
 import MvProductionTab from './components/MvProductionTab';
-import VocalStudioTab from './components/VocalStudioTab';
+import VocalStudioTab from './features/vocal-studio/components/VocalStudioTab';
 import { AudioWaveform as Waveform, Sparkles, AlertCircle, Wand2, Music, Settings, Info, Video, AudioLines } from 'lucide-react';
 import { toApiUrl } from './api/client';
 

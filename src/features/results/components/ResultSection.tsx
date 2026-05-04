@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { SunoResponse, SongSelection, MVTimeline } from '../types';
+import { SunoResponse, SongSelection, MVTimeline } from '../../../types';
 import { Copy, Check, Sparkles, Wand2, Mic2, MicOff, Disc, FileText, ListMusic, ArrowRight, Loader2, ExternalLink, Zap, Music2, AlertCircle, Film, Download } from 'lucide-react';
 
 interface ResultSectionProps {
