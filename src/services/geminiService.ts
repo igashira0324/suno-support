@@ -172,8 +172,8 @@ export const generateSunoPrompt = async (
     theme: string = ""
 ): Promise<SunoResponse> => {
     try {
-        const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY;
-        if (!apiKey) throw new Error("API Key is missing.");
+        const apiKey = import.meta.env.VITE_GEMINI_API_KEY || (typeof process !== 'undefined' ? process.env.GEMINI_API_KEY : '');
+        if (!apiKey) throw new Error("API Key is missing. Please set VITE_GEMINI_API_KEY in .env");
 
         const genAI = new GoogleGenAI({ apiKey: apiKey });
 
@@ -304,8 +304,8 @@ export const generateFromSelectedTitle = async (
     options: { modelName: string; lyricsLanguage?: string } = { modelName: 'gemini-3-flash-preview', lyricsLanguage: 'Japanese' }
 ): Promise<{ bestSelection: any; alternativeSelection: any; tokenUsage?: any }> => {
     try {
-        const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY;
-        if (!apiKey) throw new Error("API Key is missing.");
+        const apiKey = import.meta.env.VITE_GEMINI_API_KEY || (typeof process !== 'undefined' ? process.env.GEMINI_API_KEY : '');
+        if (!apiKey) throw new Error("API Key is missing. Please set VITE_GEMINI_API_KEY in .env");
 
         const genAI = new GoogleGenAI({ apiKey: apiKey });
         const modelName = options.modelName || "gemini-3-flash-preview";
@@ -445,8 +445,8 @@ export const generateTitle = async (
     modelName: string = 'gemini-3-flash-preview'
 ): Promise<string> => {
     try {
-        const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY;
-        if (!apiKey) throw new Error("API Key is missing.");
+        const apiKey = import.meta.env.VITE_GEMINI_API_KEY || (typeof process !== 'undefined' ? process.env.GEMINI_API_KEY : '');
+        if (!apiKey) throw new Error("API Key is missing. Please set VITE_GEMINI_API_KEY in .env");
 
         const genAI = new GoogleGenAI({ apiKey: apiKey });
 
@@ -516,7 +516,7 @@ export const generateTitle = async (
 const callLocalLLM = async (messages: any[], temperature: number = 0.3): Promise<string | null> => {
     try {
         // Use backend proxy to avoid CORS issues
-        const response = await fetch('http://localhost:8100/acestep/llm-proxy', {
+        const response = await fetch('/api/acestep/llm-proxy', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -711,7 +711,7 @@ Output ONLY the structured lyrics text.`;
 
     // 2. Fallback to Gemini API
     try {
-        const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY;
+        const apiKey = import.meta.env.VITE_GEMINI_API_KEY || (typeof process !== 'undefined' ? process.env.GEMINI_API_KEY : '');
         if (!apiKey) {
             console.warn("API Key not set, returning cleaned lyrics without AI structuring.");
             return processedLyrics; // Return CLEANED lyrics instead of RAW
@@ -790,8 +790,8 @@ export const generateStyleFromLyrics = async (
     modelName: string = 'gemini-3-flash-preview'
 ): Promise<string> => {
     try {
-        const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY;
-        if (!apiKey) throw new Error('API Key is missing.');
+        const apiKey = import.meta.env.VITE_GEMINI_API_KEY || (typeof process !== 'undefined' ? process.env.GEMINI_API_KEY : '');
+        if (!apiKey) throw new Error('API Key is missing. Please set VITE_GEMINI_API_KEY in .env');
         
         // Dynamically import to avoid top-level await issues if any
         const { GoogleGenAI } = await import('@google/genai');

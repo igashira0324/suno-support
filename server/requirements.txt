@@ -18,3 +18,6 @@ pedalboard
 matchering
 pretty_midi
 basic-pitch
+pydantic-settings
+google-generativeai
+python-dotenv
