@@ -4,6 +4,8 @@ export interface SeparationResult {
     vocals_path: string;
     instrumental_path: string;
     original_path?: string;
+    vocals_wav_url?: string;
+    instrumental_wav_url?: string;
 }
 
 export interface TaskState {

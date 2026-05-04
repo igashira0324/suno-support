@@ -14,12 +14,14 @@ router = APIRouter(prefix="/files", tags=["files"])
 @router.post("/upload")
 async def upload_file(file: UploadFile = File(...)):
     try:
+        # P2: Handle None content_type
+        content_type = file.content_type or ""
         # P1: Preserve original extension or guess from content type
         orig_ext = Path(file.filename).suffix
         if not orig_ext:
-            if "audio/mpeg" in file.content_type:
+            if "audio/mpeg" in content_type:
                 ext = ".mp3"
-            elif "audio/wav" in file.content_type or "audio/x-wav" in file.content_type:
+            elif "audio/wav" in content_type or "audio/x-wav" in content_type:
                 ext = ".wav"
             else:
                 ext = ".mp3" # Default fallback

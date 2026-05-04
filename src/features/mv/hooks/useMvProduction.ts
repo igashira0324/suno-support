@@ -183,8 +183,8 @@ export const useMvProduction = () => {
         setVoiceChange(prev => ({ ...prev, status: 'converting', progress: 0, error: null }));
         try {
             const data = await mvApi.voiceConvert({
-                instrumental_url: state.result.instrumental_url,
-                vocals_url: state.result.vocals_url,
+                instrumental_url: state.result.instrumental_wav_url || state.result.instrumental_url,
+                vocals_url: state.result.vocals_wav_url || state.result.vocals_url,
                 original_url: (state.result as any)?.original_path,
                 reference_audio: voiceChange.newVocalsFile,
                 diffusion_steps: voiceChange.diffusionSteps,

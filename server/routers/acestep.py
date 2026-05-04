@@ -62,18 +62,21 @@ def transcode_to_mp3(src_path: Path, dst_path: Optional[Path] = None, bitrate: s
         if dst_path.suffix.lower() == ".mp3" and dst_path.stat().st_mtime >= src_path.stat().st_mtime:
             return dst_path
 
-    # If already mp3 and same path, just return
-    if src_path.suffix.lower() == ".mp3" and src_path.resolve() == dst_path.resolve():
-        return src_path
+    # If already mp3, just copy to destination and return
+    if src_path.suffix.lower() == ".mp3":
+        if src_path.resolve() == dst_path.resolve():
+            return src_path
+        shutil.copy2(src_path, dst_path)
+        return dst_path
 
     # Transcode using pydub
     try:
         audio = AudioSegment.from_file(str(src_path))
         audio.export(str(dst_path), format="mp3", bitrate=bitrate)
         return dst_path
-    except Exception as e:
+    except Exception:
         logger.exception(f"Error transcoding to mp3: {src_path} -> {dst_path}")
-        raise e
+        raise
 
 
 router = APIRouter(prefix="/acestep", tags=["acestep"])
@@ -86,9 +89,15 @@ async def acestep_health():
     Proxy health check to the ACE-Step API Server (Port 8101).
     Used by the frontend to prevent generating before models are loaded.
     """
+    from fastapi.responses import JSONResponse
     try:
         r = requests.get(f"{acestep_service.ACESTEP_API_URL}/health", timeout=3)
-        return r.json()
+        try:
+            content = r.json()
+        except Exception:
+            content = {"status": "error", "detail": r.text}
+        
+        return JSONResponse(status_code=r.status_code, content=content)
     except Exception as e:
         raise HTTPException(status_code=503, detail=str(e))
 
@@ -381,12 +390,14 @@ def run_voice_conversion_task(
 async def acestep_upload_source(file: UploadFile = File(...)):
     # Legacy wrapper
     try:
+        # P2: Handle None content_type
+        content_type = file.content_type or ""
         # P1: Preserve original extension or guess from content type
         orig_ext = Path(file.filename).suffix
         if not orig_ext:
-            if "audio/mpeg" in file.content_type:
+            if "audio/mpeg" in content_type:
                 ext = ".mp3"
-            elif "audio/wav" in file.content_type or "audio/x-wav" in file.content_type:
+            elif "audio/wav" in content_type or "audio/x-wav" in content_type:
                 ext = ".wav"
             else:
                 ext = ".mp3" # Default fallback
@@ -399,8 +410,8 @@ async def acestep_upload_source(file: UploadFile = File(...)):
         with open(filepath, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
         return {"status": "success", "path": str(filepath.resolve())}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        raise
 
 @router.post("/download-url")
 async def acestep_download_url(request: Request):
@@ -825,6 +836,9 @@ async def get_clap_presets():
 async def acestep_post_process(request: PostProcessRequest):
     try:
         local_path = resolve_web_path(request.file_url)
+        if not local_path.exists():
+            raise HTTPException(status_code=404, detail="File not found")
+            
         y, sr = librosa.load(str(local_path), sr=None, mono=False)
         
         # P2: Auto Trim (Simple silence removal)
@@ -853,5 +867,7 @@ async def acestep_post_process(request: PostProcessRequest):
             "url": f"/outputs/merged/{processed_mp3.name}",
             "wav_url": f"/outputs/merged/{processed_wav.name}"
         }
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
