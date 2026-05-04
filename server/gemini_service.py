@@ -12,6 +12,22 @@ logger = logging.getLogger("SunoArchitect.GeminiService")
 if settings.gemini_api_key:
     genai.configure(api_key=settings.gemini_api_key)
 
+def normalize_model_name(model_name: Optional[str]) -> str:
+    """Fallback logic for model names."""
+    if not model_name:
+        return "gemini-1.5-flash"
+    
+    # ユーザーがgemini-3系を選択した場合、API側で対応している1.5 Pro等にフォールバック
+    if "gemini-3" in model_name:
+        return "gemini-1.5-pro"
+        
+    return model_name
+
+def ensure_gemini_configured():
+    """Check if Gemini API key is configured."""
+    if not settings.gemini_api_key:
+        raise RuntimeError("GEMINI_API_KEY is not configured. Please set it in .env.")
+
 SYSTEM_INSTRUCTION = """
 あなたはSuno.aiのエキスパートであり、最新のモデル（v4.5以降）を熟知した音楽プロデューサーです。
 現在、ユーザーはAPIクォータ制限に直面しています。効率的かつ高品質なプロンプトを作成してください。
@@ -87,13 +103,11 @@ async def generate_suno_prompt(
     options: Dict[str, Any] = None,
     theme: str = ""
 ) -> Dict[str, Any]:
+    ensure_gemini_configured()
     if options is None:
         options = {"searchEngine": "none", "modelName": "gemini-1.5-flash", "lyricsLanguage": "Japanese"}
     
-    model_name = options.get("modelName", "gemini-1.5-flash")
-    # Map old names if necessary
-    if "gemini-3" in model_name:
-        model_name = "gemini-1.5-pro" # Fallback to stable for now if 3 is not available in SDK yet
+    model_name = normalize_model_name(options.get("modelName"))
 
     model = genai.GenerativeModel(
         model_name=model_name,
@@ -165,7 +179,8 @@ async def structure_lyrics(
     language: str = "ja",
     model_name: str = "gemini-1.5-flash"
 ) -> str:
-    # Port structure_lyrics logic here
+    ensure_gemini_configured()
+    model_name = normalize_model_name(model_name)
     model = genai.GenerativeModel(model_name=model_name)
     
     instruction = """You are a lyrics formatter specialized for Suno AI.
@@ -184,14 +199,17 @@ async def generate_from_selected_title(
     style_candidates: List[str],
     options: Dict[str, Any] = None
 ) -> Dict[str, Any]:
+    ensure_gemini_configured()
     if options is None:
         options = {"modelName": "gemini-1.5-flash", "lyricsLanguage": "Japanese"}
     
-    model_name = options.get("modelName", "gemini-1.5-flash")
+    model_name = normalize_model_name(options.get("modelName"))
     model = genai.GenerativeModel(
         model_name=model_name,
         system_instruction=SYSTEM_INSTRUCTION
     )
+
+    style_candidates_text = "\n".join(style_candidates)
 
     prompt = f"""
 ## タスク
@@ -204,7 +222,7 @@ async def generate_from_selected_title(
 {selected_title}
 
 ## スタイル候補（参考）
-{"\n".join(style_candidates)}
+{style_candidates_text}
 
 ## 出力ルール
 - bestSelection: 選択されたタイトルに最も適したスタイルと歌詞を生成
@@ -253,6 +271,8 @@ async def generate_title(
     prompt: str,
     model_name: str = "gemini-1.5-flash"
 ) -> str:
+    ensure_gemini_configured()
+    model_name = normalize_model_name(model_name)
     model = genai.GenerativeModel(model_name=model_name)
     
     instruction = """
@@ -273,6 +293,8 @@ async def generate_style_from_lyrics(
     language: str = "ja",
     model_name: str = "gemini-1.5-flash"
 ) -> str:
+    ensure_gemini_configured()
+    model_name = normalize_model_name(model_name)
     model = genai.GenerativeModel(model_name=model_name)
     prompt = f"Generate a Suno style prompt (comma-separated tags) for these lyrics:\n{lyrics[:1000]}\nTheme: {theme}\nURL Info: {url}"
     response = await model.generate_content_async(prompt)
@@ -282,7 +304,8 @@ async def llm_proxy(body: Dict[str, Any]) -> Dict[str, Any]:
     """
     Proxies LLM requests to Gemini.
     """
-    model_name = body.get("model", "gemini-1.5-flash")
+    ensure_gemini_configured()
+    model_name = normalize_model_name(body.get("model"))
     messages = body.get("messages", [])
     system_instruction = body.get("system_instruction", SYSTEM_INSTRUCTION)
     

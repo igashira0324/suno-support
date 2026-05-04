@@ -13,7 +13,7 @@ export const geminiApi = {
         youtube_url: string;
         image_path?: string;
         mode: GenerationMode;
-        options: { searchEngine: SearchEngine; modelName: string; lyricsLanguage?: string };
+        options: { searchEngine: SearchEngine; modelName: string; lyricsLanguage?: string; enableVideoAnalysis?: boolean };
         theme: string;
     }): Promise<SunoResponse> => {
         return apiClient.post('/gemini/generate-suno-prompt', params);

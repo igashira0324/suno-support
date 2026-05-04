@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { VocalStudioState } from '../types';
 import { toApiUrl } from '../../../api/client';
 import { aceStepApi } from '../../acestep/api/aceStepApi';
@@ -19,6 +19,22 @@ const initialVocalStudioState: VocalStudioState = {
 
 export const useVocalStudio = () => {
     const [state, setState] = useState<VocalStudioState>(initialVocalStudioState);
+    const timeoutRef = useRef<any>(null);
+
+    useEffect(() => {
+        return () => {
+            if (timeoutRef.current) {
+                clearTimeout(timeoutRef.current);
+            }
+        };
+    }, []);
+
+    const clearPolling = () => {
+        if (timeoutRef.current) {
+            clearTimeout(timeoutRef.current);
+            timeoutRef.current = null;
+        }
+    };
 
     const handleFileSelect = (file: File | undefined) => {
         if (file) {
@@ -37,6 +53,7 @@ export const useVocalStudio = () => {
             return;
         }
 
+        clearPolling();
         setState(prev => ({ 
             ...prev, 
             isProcessing: true, 
@@ -75,37 +92,47 @@ export const useVocalStudio = () => {
             
             // Step 3: Polling status
             const pollStatus = async () => {
-                const statusRes = await fetch(toApiUrl(`/svs/status/${task_id}`));
-                if (!statusRes.ok) throw new Error("ステータス取得に失敗しました");
-                
-                const task = await statusRes.json();
-                
-                if (task.status === 'completed') {
+                try {
+                    const statusRes = await fetch(toApiUrl(`/svs/status/${task_id}`));
+                    if (!statusRes.ok) throw new Error("ステータス取得に失敗しました");
+                    
+                    const task = await statusRes.json();
+                    
+                    if (task.status === 'completed') {
+                        setState(prev => ({ 
+                            ...prev, 
+                            isProcessing: false, 
+                            progress: 100, 
+                            status: '生成完了！',
+                            midiUrl: task.result.midi_url ? toApiUrl(task.result.midi_url) : null,
+                            vocalUrl: task.result.vocal_url ? toApiUrl(task.result.vocal_url) : null,  
+                            mixUrl: task.result.mix_url ? toApiUrl(task.result.mix_url) : null       
+                        }));
+                        timeoutRef.current = null;
+                    } else if (task.status === 'error') {
+                        throw new Error(task.error || "生成タスク中にエラーが発生しました");
+                    } else {
+                        setState(prev => ({ 
+                            ...prev, 
+                            status: task.status === 'processing' ? '楽器分離中...' : 
+                                    task.status === 'vocal_synthesis' ? 'ボーカル合成中...' :
+                                    task.status === 'mixing' ? '最終ミックス中...' : '処理中...',
+                            progress: task.progress 
+                        }));
+                        // Poll again in 2 seconds
+                        timeoutRef.current = setTimeout(pollStatus, 2000);
+                    }
+                } catch (e: any) {
                     setState(prev => ({ 
                         ...prev, 
                         isProcessing: false, 
-                        progress: 100, 
-                        status: '生成完了！',
-                        midiUrl: task.result.midi_url ? toApiUrl(task.result.midi_url) : null,
-                        vocalUrl: task.result.vocal_url ? toApiUrl(task.result.vocal_url) : null,  
-                        mixUrl: task.result.mix_url ? toApiUrl(task.result.mix_url) : null       
+                        error: e.message || "ポーリング中にエラーが発生しました" 
                     }));
-                } else if (task.status === 'error') {
-                    throw new Error(task.error || "生成タスク中にエラーが発生しました");
-                } else {
-                    setState(prev => ({ 
-                        ...prev, 
-                        status: task.status === 'processing' ? '楽器分離中...' : 
-                                task.status === 'vocal_synthesis' ? 'ボーカル合成中...' :
-                                task.status === 'mixing' ? '最終ミックス中...' : '処理中...',
-                        progress: task.progress 
-                    }));
-                    // Poll again in 2 seconds
-                    setTimeout(pollStatus, 2000);
+                    timeoutRef.current = null;
                 }
             };
 
-            setTimeout(pollStatus, 2000);
+            timeoutRef.current = setTimeout(pollStatus, 2000);
 
         } catch (err: any) {
             setState(prev => ({ 
@@ -113,6 +140,7 @@ export const useVocalStudio = () => {
                 isProcessing: false, 
                 error: err.message || "エラーが発生しました。"
             }));
+            timeoutRef.current = null;
         }
     };
 

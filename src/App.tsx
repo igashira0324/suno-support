@@ -11,7 +11,7 @@ import { AudioWaveform as Waveform, Sparkles, AlertCircle, Wand2, Music, Setting
 import { toApiUrl } from './api/client';
 
 const App: React.FC = () => {
-    const [activeTab, setActiveTab] = useState<'prompt' | 'yue' | 'ace' | 'mv' | 'vocal'>('vocal');
+    const [activeTab, setActiveTab] = useState<'prompt' | 'yue' | 'ace' | 'mv' | 'vocal'>('prompt');
     const [state, setState] = useState<AppState>({
         inputText: '',
         youtubeUrl: '',
