@@ -1,6 +1,15 @@
 @echo off
 setlocal
 
+:: Force UTF-8 for Python and Windows CMD
+chcp 65001 >nul
+set PYTHONUTF8=1
+set PYTHONIOENCODING=utf-8
+
+:: Fix distributed training MASTER_ADDR to avoid kubernetes warning
+set MASTER_ADDR=127.0.0.1
+set MASTER_PORT=2333
+
 echo Cleaning up existing conflicting processes...
 taskkill /F /IM "python.exe" >nul 2>&1
 taskkill /F /IM "node.exe" >nul 2>&1

@@ -87,6 +87,9 @@ export const useAceStep = () => {
     
     // P1: Periodic Health Check for ACE-Step readiness
     useEffect(() => {
+        // If already ready, stop polling
+        if (state.isAceStepReady) return;
+
         const checkHealth = async () => {
             try {
                 await acestepApi.health();
@@ -102,9 +105,9 @@ export const useAceStep = () => {
         };
 
         checkHealth();
-        const interval = setInterval(checkHealth, 10000); // Check every 10s
+        const interval = setInterval(checkHealth, 5000); // Check every 5s
         return () => clearInterval(interval);
-    }, []);
+    }, [state.isAceStepReady]);
 
     // Smooth progress simulation
     useEffect(() => {
