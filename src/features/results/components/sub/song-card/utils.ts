@@ -1,4 +1,4 @@
-import { MVTimeline } from '../../../../types';
+import { MVTimeline } from '../../../../../types';
 
 export const formatContent = (content: string): string => {
     if (!content) return '';

@@ -39,25 +39,32 @@ class SVSService:
         # Store running tasks for status API
         self.tasks: Dict[str, Any] = {}
 
+    def is_cancelled(self, task_id: str) -> bool:
+        """Helper to check if a task is cancelled."""
+        return self.tasks.get(task_id, {}).get("status") == "cancelled"
+
     def extract_midi_sync(self, task_id: str, file_path: str, instrument: str, lyrics: str):
         """
         Runs the extraction pipeline synchronously (should be called in a background thread).
-        Phase 2 PoC:
-        1. Demucs separation to get the target instrument stem.
-        2. basic-pitch Audio-to-MIDI export.
         """
         logger.info(f"[{task_id}] Starting SVS extraction for instrument: {instrument}")
         
         try:
-            self.tasks[task_id] = {"status": "separating", "progress": 10, "result": {}}
+            # Race condition protection: Check if cancelled during queue
+            if self.is_cancelled(task_id):
+                logger.info(f"[{task_id}] Cancelled before starting.")
+                return {}
+
+            self.tasks[task_id].update({
+                "status": "separating",
+                "progress": 10,
+                "result": {}
+            })
             
             task_output_dir = self.output_dir / task_id
             task_output_dir.mkdir(parents=True, exist_ok=True)
             
             # Step 1: Instrument Separation using Demucs 6-stem model
-            if self.tasks.get(task_id, {}).get("status") == "cancelled":
-                return {}
-
             if not HAS_SEPARATOR:
                 raise ImportError("audio-separator not installed.")
 
@@ -71,6 +78,10 @@ class SVSService:
             logger.info(f"[{task_id}] Running separation with htdemucs_6s...")
             output_files = separator.separate(file_path)
             
+            if self.is_cancelled(task_id):
+                logger.info(f"[{task_id}] Cancelled after separation.")
+                return {}
+
             # Find the requested stem
             target_stem_path = None
             
@@ -85,11 +96,6 @@ class SVSService:
             
             logger.info(f"[{task_id}] Looking for stem containing '{target_keyword}'...")
             
-            # [FUTURE: Pattern 2 - Automatic Stem Detection]
-            # If target_keyword == 'auto', we can iterate through 'piano', 'guitar', 'other' stems
-            # and analyze their RMS energy or frequency content using librosa or pydub.
-            # The stem with the highest sustained mid-frequency energy could be selected as the melody.
-            
             for fname in output_files:
                 if target_keyword in fname.lower():
                     target_stem_path = task_output_dir / fname
@@ -99,12 +105,10 @@ class SVSService:
                 raise Exception(f"Stem '{target_keyword}' could not be extracted.")
                 
             logger.info(f"[{task_id}] Target stem found: {target_stem_path}")
-            self.tasks[task_id]["progress"] = 50
-            self.tasks[task_id]["status"] = "midi_conversion"
             
-            if self.tasks.get(task_id, {}).get("status") == "cancelled":
-                return {}
-
+            if self.is_cancelled(task_id): return {}
+            self.tasks[task_id].update({"progress": 50, "status": "midi_conversion"})
+            
             # Step 2: Audio-to-MIDI via basic-pitch
             midi_url = None
             midi_filepath = None
@@ -120,13 +124,10 @@ class SVSService:
                 midi_url = f"/outputs/{task_id}/{midi_filename}"
             else:
                 logger.warning(f"[{task_id}] basic-pitch missing. Skipping MIDI generation.")
-                
-            self.tasks[task_id]["progress"] = 70
-            self.tasks[task_id]["status"] = "vocal_synthesis"
             
-            if self.tasks.get(task_id, {}).get("status") == "cancelled":
-                return {}
-
+            if self.is_cancelled(task_id): return {}
+            self.tasks[task_id].update({"progress": 70, "status": "vocal_synthesis"})
+            
             # Step 3: Vocal Synthesis (Phase 3 Implementation)
             vocal_url = None
             mix_url = None
@@ -134,12 +135,14 @@ class SVSService:
             if midi_filepath and midi_filepath.exists() and lyrics:
                 try:
                     vocal_path = self.synthesize_vocals(task_id, midi_filepath, lyrics, task_output_dir)
+                    
+                    if self.is_cancelled(task_id): return {}
+                    
                     if vocal_path and vocal_path.exists():
                         vocal_url = f"/outputs/{task_id}/{vocal_path.name}"
                         
                         # Step 4: Final Mix
-                        self.tasks[task_id]["status"] = "mixing"
-                        self.tasks[task_id]["progress"] = 90
+                        self.tasks[task_id].update({"status": "mixing", "progress": 90})
                         mix_path = self.create_final_mix(task_id, vocal_path, file_path, task_output_dir)
                         if mix_path:
                             mix_url = f"/outputs/{task_id}/{mix_path.name}"
@@ -156,16 +159,21 @@ class SVSService:
                 "mix_url": mix_url
             }
             
-            self.tasks[task_id]["progress"] = 100
-            self.tasks[task_id]["status"] = "completed"
-            self.tasks[task_id]["result"] = result_data
+            if self.is_cancelled(task_id): return {}
+
+            self.tasks[task_id].update({
+                "progress": 100,
+                "status": "completed",
+                "result": result_data
+            })
             
             return result_data
             
         except Exception as e:
+            if self.is_cancelled(task_id):
+                return {}
             logger.exception(f"[{task_id}] Error in SVS extraction pipeline: {e}")
-            self.tasks[task_id]["status"] = "error"
-            self.tasks[task_id]["error"] = str(e)
+            self.tasks[task_id].update({"status": "error", "error": str(e)})
             raise e
 
     def synthesize_vocals(self, task_id: str, midi_path: Path, lyrics: str, output_dir: Path) -> Optional[Path]:

@@ -23,6 +23,15 @@ export const useVocalStudio = () => {
     const taskIdRef = useRef<string | null>(null);
 
     useEffect(() => {
+        if (state.instrumentalUrl && state.instrumentalUrl.startsWith('blob:')) {
+            const url = state.instrumentalUrl;
+            return () => {
+                URL.revokeObjectURL(url);
+            };
+        }
+    }, [state.instrumentalUrl]);
+
+    useEffect(() => {
         return () => {
             if (timeoutRef.current) {
                 clearTimeout(timeoutRef.current);

@@ -2,7 +2,7 @@ import React from 'react';
 import { Film } from 'lucide-react';
 import { CopyButton } from '../CopyButton';
 import { getTimelineDisplayString } from './utils';
-import { MVTimeline } from '../../../../types';
+import { MVTimeline } from '../../../../../types';
 
 interface TimelineBlockProps {
     timeline: string | MVTimeline | undefined;
