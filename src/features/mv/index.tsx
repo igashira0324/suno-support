@@ -74,7 +74,7 @@ const MvProduction: React.FC = () => {
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `trim_${activeTrack}_${Math.floor(selectedRegion.start)}-${Math.floor(selectedRegion.end)}.wav`;
+            a.download = `trim_${activeTrack}_${Math.floor(selectedRegion.start)}-${Math.floor(selectedRegion.end)}.mp3`;
             document.body.appendChild(a);
             a.click();
             window.URL.revokeObjectURL(url);

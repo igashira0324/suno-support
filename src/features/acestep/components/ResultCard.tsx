@@ -40,7 +40,7 @@ export const ResultCard: React.FC<ResultCardProps> = ({
 
                     <div className="flex gap-2 flex-shrink-0">
                         <button
-                            onClick={() => onDownload(file.url, `${title}_${index + 1}.wav`)}
+                            onClick={() => onDownload(file.url, `${title}_${index + 1}.mp3`)}
                             className="p-2 rounded-lg bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 transition-all"
                             title="Download"
                         >

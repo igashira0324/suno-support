@@ -51,11 +51,15 @@ async def trim_audio(
         trimmed = audio[start_ms:end_ms]
         
         output = io.BytesIO()
-        trimmed.export(output, format="wav")
+        trimmed.export(output, format="mp3", bitrate="192k")
         output.seek(0)
-        filename = f"trimmed_{target_path.stem}.wav"
+        filename = f"trimmed_{target_path.stem}.mp3"
         
-        return StreamingResponse(output, media_type="audio/wav", headers={"Content-Disposition": f"attachment; filename={filename}"})
+        return StreamingResponse(
+            output, 
+            media_type="audio/mpeg", 
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

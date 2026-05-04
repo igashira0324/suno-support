@@ -16,6 +16,7 @@ import torch
 import numpy as np
 import librosa
 import soundfile as sf
+from pydub import AudioSegment
 
 from core.config import settings
 from core.state import tasks
@@ -36,6 +37,38 @@ def to_web_path(path: Path) -> str:
         pass
 
     return str(path)
+
+def transcode_to_mp3(src_path: Path, dst_path: Optional[Path] = None, bitrate: str = "320k") -> Path:
+    """
+    Convert audio file to MP3 using pydub/ffmpeg.
+    If src is already mp3, returns src_path unless dst_path is specified.
+    """
+    src_path = Path(src_path)
+
+    if dst_path is None:
+        dst_path = src_path.with_suffix(".mp3")
+    else:
+        dst_path = Path(dst_path)
+
+    dst_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Return if destination already exists and is not empty
+    if dst_path.exists() and dst_path.stat().st_size > 0:
+        return dst_path
+
+    # If already mp3 and same path, just return
+    if src_path.suffix.lower() == ".mp3" and src_path.resolve() == dst_path.resolve():
+        return src_path
+
+    # Transcode using pydub
+    try:
+        audio = AudioSegment.from_file(str(src_path))
+        audio.export(str(dst_path), format="mp3", bitrate=bitrate)
+        return dst_path
+    except Exception as e:
+        # Fallback or re-raise
+        print(f"Error transcoding to mp3: {e}")
+        raise e
 
 logger = logging.getLogger("SunoArchitect.AceStep")
 
@@ -225,15 +258,21 @@ def run_separation_task(task_id: str, input_path: Path):
             if not inst_path.exists(): missing.append("instrumental")
             raise Exception(f"Separation failed: Missing required stems: {', '.join(missing)}")
         
-        tasks[task_id]["result"] = {
+        # Transcode results to MP3 for UI/Browser usage
+        vocals_mp3 = transcode_to_mp3(vocals_path)
+        inst_mp3 = transcode_to_mp3(inst_path)
 
-            "vocals_url": f"/outputs/separated/{task_id}/vocals.wav" if vocals_path.exists() else None,
-            "instrumental_url": f"/outputs/separated/{task_id}/instrumental.wav" if inst_path.exists() else None,
+        tasks[task_id]["result"] = {
+            "vocals_url": f"/outputs/separated/{task_id}/vocals.mp3" if vocals_mp3.exists() else None,
+            "instrumental_url": f"/outputs/separated/{task_id}/instrumental.mp3" if inst_mp3.exists() else None,
+            # Keep WAV URLs for internal/high-quality use
+            "vocals_wav_url": f"/outputs/separated/{task_id}/vocals.wav" if vocals_path.exists() else None,
+            "instrumental_wav_url": f"/outputs/separated/{task_id}/instrumental.wav" if inst_path.exists() else None,
             "original_path": to_web_path(input_path)
         }
         tasks[task_id]["status"] = "completed"
         tasks[task_id]["progress"] = 100
-        logger.info(f"Separation task {task_id} finished successfully.")
+        logger.info(f"Separation task {task_id} finished successfully with MP3 output.")
         
     except Exception as e:
         logger.error(f"Separation failed for {task_id}: {e}")
@@ -315,9 +354,15 @@ def run_voice_conversion_task(
         else:
             shutil.copy(pre_master, final_output)
             
+        # Final MP3 Transcoding
+        final_mp3 = transcode_to_mp3(final_output)
+
         tasks[task_id]["status"] = "completed"
         tasks[task_id]["progress"] = 100
-        tasks[task_id]["result"] = {"merged_url": f"/outputs/voice_converted/{task_id}/merged_output.wav"}
+        tasks[task_id]["result"] = {
+            "merged_url": f"/outputs/voice_converted/{task_id}/merged_output.mp3",
+            "merged_wav_url": f"/outputs/voice_converted/{task_id}/merged_output.wav"
+        }
     except Exception as e:
         logger.error(f"VC failed: {e}")
         tasks[task_id]["status"] = "failed"
@@ -595,14 +640,25 @@ async def get_acestep_status(task_id: str):
             if actual_path and os.path.exists(actual_path):
                 try:
                     task_output_dir.mkdir(parents=True, exist_ok=True)
-                    ext = Path(actual_path).suffix or ".mp3"
-                    local_filename = f"generated_{idx}{ext}"
+                    src_path = Path(actual_path)
+                    src_ext = src_path.suffix.lower()
+                    
+                    local_filename = f"generated_{idx}.mp3"
                     local_dest = task_output_dir / local_filename
                     
                     if not local_dest.exists():
-                        shutil.copy2(actual_path, local_dest)
+                        if src_ext == ".mp3":
+                            shutil.copy2(src_path, local_dest)
+                        else:
+                            try:
+                                transcode_to_mp3(src_path, local_dest)
+                            except Exception as trans_err:
+                                logger.error(f"Transcode failed during localization: {trans_err}")
+                                # Fallback to copy even if extension mismatch (UI might handle)
+                                shutil.copy2(src_path, local_dest)
                     
                     item["url"] = f"/outputs/acestep_generated/{task_id}/{local_filename}"
+                    item["format"] = "mp3"
                 except Exception as e:
                     logger.error(f"Failed to localize file {actual_path}: {e}")
             
@@ -759,8 +815,15 @@ async def acestep_post_process(request: PostProcessRequest):
             if y.ndim > 1: y[:, -fade_samples:] *= fade_curve
             else: y[-fade_samples:] *= fade_curve
             
-        processed_path = MERGED_DIR / f"proc_{uuid.uuid4().hex[:8]}.wav"
-        sf.write(str(processed_path), y.T if y.ndim > 1 else y, sr)
-        return {"status": "success", "url": f"/outputs/merged/{processed_path.name}"}
+        processed_wav = MERGED_DIR / f"proc_{uuid.uuid4().hex[:8]}.wav"
+        sf.write(str(processed_wav), y.T if y.ndim > 1 else y, sr)
+
+        processed_mp3 = transcode_to_mp3(processed_wav)
+        
+        return {
+            "status": "success", 
+            "url": f"/outputs/merged/{processed_mp3.name}",
+            "wav_url": f"/outputs/merged/{processed_wav.name}"
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

@@ -164,7 +164,7 @@ export const VoiceChangeSection: React.FC<VoiceChangeSectionProps> = ({
                         </div>
                         <a
                             href={voiceChange.mergedUrl}
-                            onClick={(e) => onDownloadMerged(e, voiceChange.mergedUrl!, 'converted_merged.wav')}
+                            onClick={(e) => onDownloadMerged(e, voiceChange.mergedUrl!, 'converted_merged.mp3')}
                             className="group flex items-center gap-3 px-10 py-5 bg-white text-slate-950 hover:bg-indigo-50 rounded-3xl font-black text-sm transition-all shadow-2xl shadow-indigo-500/20"
                         >
                             <Download className="w-5 h-5 group-hover:scale-110 transition-transform" />
