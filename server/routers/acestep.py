@@ -99,6 +99,9 @@ def run_separation_task(task_id: str, input_path: Path):
         
         separator = Separator(output_dir=str(output_dir), output_format="wav")
         tasks[task_id]["progress"] = 15
+        
+        if tasks[task_id].get("status") == "cancelled": return
+        
         separator.load_model(model_filename="htdemucs_ft.yaml")
         tasks[task_id]["progress"] = 25
         
@@ -145,6 +148,8 @@ def run_voice_conversion_task(
         
         tasks[task_id]["status"] = "processing"
         tasks[task_id]["progress"] = 5
+        
+        if tasks[task_id].get("status") == "cancelled": return
         
         seed_vc_dir = settings.project_dir / "seed-vc"
         output_dir = VC_DIR / task_id
@@ -351,12 +356,21 @@ async def acestep_separate(background_tasks: BackgroundTasks, file: UploadFile =
 @router.post("/separate-url")
 async def acestep_separate_url(request: SeparateRequest, background_tasks: BackgroundTasks):
     try:
-        local_path = resolve_web_path(request.file_url)
+        # P0-2: Handle both local paths and external URLs
+        if request.file_url.startswith(("http://", "https://")):
+            local_path = await download_audio_from_url(request.file_url, ACESTEP_SOURCE_DIR)
+        else:
+            local_path = resolve_web_path(request.file_url)
+            
+        if not local_path or not local_path.exists():
+            raise HTTPException(status_code=404, detail="Audio file not found")
+            
         task_id = f"sep_{uuid.uuid4().hex[:8]}"
         tasks[task_id] = {"status": "processing", "progress": 0, "type": "separation"}
         background_tasks.add_task(run_separation_task, task_id, local_path)
         return {"task_id": task_id}
     except Exception as e:
+        logger.error(f"Separate URL error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/voice-convert")

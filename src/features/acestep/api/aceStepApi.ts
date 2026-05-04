@@ -89,8 +89,8 @@ export const aceStepApi = {
    * Start separation (for Voice Change)
    */
   separate: async (fileUrl: string) => {
-    // P0-4: Backend expects file_url
-    return apiClient.post<{ task_id: string }>('/acestep/separate', { file_url: fileUrl });
+    // P0-1: Use separate-url for JSON payload compatibility
+    return apiClient.post<{ task_id: string }>('/acestep/separate-url', { file_url: fileUrl });
   },
 
   /**

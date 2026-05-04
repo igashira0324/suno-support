@@ -14,10 +14,11 @@ export const mvApi = {
     },
 
     separateUrl: async (url: string) => {
+        // P0-2: Fix key name to file_url for backend compatibility
         const response = await fetch(toApiUrl('/acestep/separate-url'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url })
+            body: JSON.stringify({ file_url: url })
         });
         if (!response.ok) throw new Error('Failed to start URL import');
         return response.json();
