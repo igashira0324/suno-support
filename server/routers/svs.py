@@ -1,6 +1,6 @@
 import logging
 from pydantic import BaseModel
-from fastapi import APIRouter, HTTPException, File, UploadFile
+from fastapi import APIRouter, HTTPException
 
 from core.config import settings
 from core.utils import resolve_web_path

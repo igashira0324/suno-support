@@ -114,9 +114,12 @@ export const useVocalStudio = () => {
                     } else {
                         setState(prev => ({ 
                             ...prev, 
-                            status: task.status === 'processing' ? '楽器分離中...' : 
+                            status: task.status === 'queued' ? '待機中...' :
+                                    task.status === 'separating' ? '楽器分離中...' : 
+                                    task.status === 'midi_conversion' ? 'MIDI変換中...' :
                                     task.status === 'vocal_synthesis' ? 'ボーカル合成中...' :
-                                    task.status === 'mixing' ? '最終ミックス中...' : '処理中...',
+                                    task.status === 'mixing' ? '最終ミックス中...' : 
+                                    task.status === 'processing' ? '処理中...' : '処理中...',
                             progress: task.progress 
                         }));
                         // Poll again in 2 seconds
