@@ -13,6 +13,7 @@ from pathlib import Path
 from urllib.parse import quote, unquote, urlparse
 from typing import Optional, List, Dict
 from fastapi import APIRouter, UploadFile, File, HTTPException, Body, Request, Form, BackgroundTasks
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 import torch
 import numpy as np
@@ -88,8 +89,8 @@ async def acestep_health():
     """
     Proxy health check to the ACE-Step API Server (Port 8101).
     Used by the frontend to prevent generating before models are loaded.
+    Preserve upstream HTTP status code.
     """
-    from fastapi.responses import JSONResponse
     try:
         r = requests.get(f"{acestep_service.ACESTEP_API_URL}/health", timeout=3)
         try:
@@ -685,7 +686,7 @@ async def get_acestep_status(task_id: str):
                             except Exception as trans_err:
                                 # P1: Don't fake .mp3 if transcode fails. Outer catch will handle.
                                 logger.error(f"Transcode failed during localization: {trans_err}")
-                                raise trans_err
+                                raise
                     
                     item["url"] = f"/outputs/acestep_generated/{task_id}/{local_filename}"
                     item["format"] = local_filename.split(".")[-1]
@@ -771,6 +772,13 @@ async def acestep_voice_convert(
         vox_path = resolve_web_path(vocals_url)
         orig_path = resolve_web_path(original_url) if original_url else None
         
+        if not inst_path or not inst_path.exists():
+            raise HTTPException(status_code=404, detail="Instrumental file not found")
+        if not vox_path or not vox_path.exists():
+            raise HTTPException(status_code=404, detail="Vocals file not found")
+        if orig_path and not orig_path.exists():
+            orig_path = None
+        
         ref_path = ACESTEP_SOURCE_DIR / f"ref_{uuid.uuid4().hex[:8]}{Path(reference_audio.filename).suffix}"
         with open(ref_path, "wb") as buffer:
             shutil.copyfileobj(reference_audio.file, buffer)
@@ -784,6 +792,8 @@ async def acestep_voice_convert(
             diffusion_steps, f0_condition, auto_f0_adjust, pitch_shift
         )
         return {"task_id": task_id}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
