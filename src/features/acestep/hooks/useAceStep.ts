@@ -171,14 +171,16 @@ export const useAceStep = () => {
     }, [state.task_type, state.autoTrim, state.fadeDuration]);
 
     const handleGenerate = async () => {
-        setState(prev => ({ ...prev, isGenerating: true, status: 'starting', progress: 0, error: null, output_files: [], startTime: Date.now() }));
+        setState(prev => ({ ...prev, isGenerating: true, status: 'starting', progress: 0, error: null, startTime: Date.now() }));
         setVisualProgress(0);
 
         try {
-            // Background Title Gen
+            // Background Title Gen - Disabled to avoid 429 quota errors
+            /*
             generateTitle(state.lyrics, state.theme, state.prompt)
                 .then(title => setState(prev => ({ ...prev, generatedTitle: title })))
                 .catch(e => console.error("Title gen failed", e));
+            */
 
             let srcAudioPath: string | null = null;
             if (['cover', 'repaint', 'lego'].includes(state.task_type)) {

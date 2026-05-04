@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertCircle, History, Sparkles } from 'lucide-react';
+import { AlertCircle, History, Sparkles, Music2 } from 'lucide-react';
 import { useAceStep } from '../features/acestep/hooks/useAceStep';
 import { ImageSection } from '../features/acestep/components/ImageSection';
 import { LyricsSection } from '../features/acestep/components/LyricsSection';
@@ -22,6 +22,15 @@ const AceStepTab: React.FC = () => {
         handleAnalyzeImage,
         isDownloading
     } = useAceStep();
+
+    const resultsRef = React.useRef<HTMLDivElement>(null);
+
+    // Auto-scroll to results when new files are added
+    React.useEffect(() => {
+        if (state.output_files.length > 0 && !state.isGenerating) {
+            resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    }, [state.output_files.length, state.isGenerating]);
 
     return (
         <div className="relative min-h-screen bg-slate-950 text-slate-200 overflow-x-hidden">
@@ -61,43 +70,67 @@ const AceStepTab: React.FC = () => {
                     </div>
                 )}
 
-                {/* Main Content Grid */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    {/* Left Column: Editor */}
-                    <div className="lg:col-span-2 space-y-6">
-                        <LyricsSection state={state} setState={setState} />
-                    </div>
+                {/* Main Layout */}
+                <div className="grid grid-cols-1 xl:grid-cols-[1fr_360px] gap-6 items-start">
+                    {/* Left Column */}
+                    <main className="space-y-6 min-w-0">
+                        <div ref={resultsRef} />
+                        
+                        {/* Results first after generation */}
+                        {state.output_files.length > 0 && (
+                            <section className="space-y-4 animate-in fade-in slide-in-from-top-4 duration-500">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-9 h-9 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
+                                            <Sparkles className="w-4 h-4 text-indigo-400" />
+                                        </div>
+                                        <div>
+                                            <h2 className="text-lg font-black text-white uppercase tracking-widest">
+                                                Generated Tracks
+                                            </h2>
+                                            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+                                                {state.output_files.length} audio file{state.output_files.length > 1 ? 's' : ''} available
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
 
-                    {/* Right Column: Controls */}
-                    <div className="space-y-6">
-                        <ImageSection state={state} setState={setState} onAnalyze={handleAnalyzeImage} />
-                        <SettingsSection state={state} setState={setState} onGenerate={handleGenerate} visualProgress={visualProgress} />
-                    </div>
+                                <div className="grid grid-cols-1 gap-4">
+                                    {state.output_files.map((file, idx) => (
+                                        <ResultCard
+                                            key={`${file.url}-${idx}`}
+                                            file={file}
+                                            index={idx}
+                                            generatedTitle={state.generatedTitle}
+                                            onDownload={handleDownloadFile}
+                                            onStartVoiceChange={handleStartVoiceChange}
+                                        />
+                                    ))}
+                                </div>
+                            </section>
+                        )}
+
+                        {/* Editor */}
+                        <LyricsSection state={state} setState={setState} />
+                    </main>
+
+                    {/* Right Column */}
+                    <aside className="space-y-6 xl:sticky xl:top-24">
+                        <SettingsSection
+                            state={state}
+                            setState={setState}
+                            onGenerate={handleGenerate}
+                            visualProgress={visualProgress}
+                        />
+
+                        <ImageSection
+                            state={state}
+                            setState={setState}
+                            onAnalyze={handleAnalyzeImage}
+                        />
+                    </aside>
                 </div>
 
-                {/* Results Section */}
-                {state.output_files.length > 0 && (
-                    <section className="pt-12 space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
-                        <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
-                                <Sparkles className="w-5 h-5 text-indigo-400" />
-                            </div>
-                            <h2 className="text-xl font-black text-white uppercase tracking-widest">Acoustic Artifacts</h2>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            {state.output_files.map((file, idx) => (
-                                <ResultCard
-                                    key={idx}
-                                    file={file}
-                                    index={idx}
-                                    generatedTitle={state.generatedTitle}
-                                    onDownload={handleDownloadFile}
-                                    onStartVoiceChange={handleStartVoiceChange}
-                                />
-                            ))}
-                        </div>
-                    </section>
-                )}
             </div>
 
             {/* Voice Change Dialog */}
