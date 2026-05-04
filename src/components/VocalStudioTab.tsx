@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { Upload, Music, Mic, FileAudio, Check, AlertCircle, Wand2, AudioLines, Sparkles, SlidersHorizontal, Info } from 'lucide-react';
 import { VocalStudioState } from '../types';
+import { toApiUrl } from '../api/client';
 import WaveformPlayer from './WaveformPlayer';
 
 const initialVocalStudioState: VocalStudioState = {
@@ -55,7 +56,7 @@ export default function VocalStudioTab() {
             const formData = new FormData();
             formData.append('file', state.instrumentalFile);
             
-            const uploadRes = await fetch('http://localhost:8100/acestep/upload-source', {
+            const uploadRes = await fetch(toApiUrl('/acestep/upload-source'), {
                 method: 'POST',
                 body: formData
             });
@@ -66,7 +67,7 @@ export default function VocalStudioTab() {
             setState(prev => ({ ...prev, status: 'タスクを予約中...', progress: 20 }));
 
             // Step 2: Start SVS Task
-            const startRes = await fetch('http://localhost:8100/svs/generate', {
+            const startRes = await fetch(toApiUrl('/svs/generate'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -85,7 +86,7 @@ export default function VocalStudioTab() {
             
             // Step 3: Polling status
             const pollStatus = async () => {
-                const statusRes = await fetch(`http://localhost:8100/svs/status/${task_id}`);
+                const statusRes = await fetch(toApiUrl(`/svs/status/${task_id}`));
                 if (!statusRes.ok) throw new Error("ステータス取得に失敗しました");
                 
                 const task = await statusRes.json();
@@ -96,9 +97,9 @@ export default function VocalStudioTab() {
                         isProcessing: false, 
                         progress: 100, 
                         status: '生成完了！',
-                        midiUrl: task.result.midi_url ? `http://localhost:8100${task.result.midi_url}` : null,
-                        vocalUrl: task.result.vocal_url ? `http://localhost:8100${task.result.vocal_url}` : null,  
-                        mixUrl: task.result.mix_url ? `http://localhost:8100${task.result.mix_url}` : null       
+                        midiUrl: task.result.midi_url ? toApiUrl(task.result.midi_url) : null,
+                        vocalUrl: task.result.vocal_url ? toApiUrl(task.result.vocal_url) : null,  
+                        mixUrl: task.result.mix_url ? toApiUrl(task.result.mix_url) : null       
                     }));
                 } else if (task.status === 'error') {
                     throw new Error(task.error || "生成タスク中にエラーが発生しました");

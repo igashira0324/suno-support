@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from core.config import settings
 from core.cors import setup_cors
 from core.static_files import setup_static_files
-from routers import tasks, acestep, files, suno
+from routers import tasks, acestep, files, suno, gemini
 
 # Initialize logging
 logging.basicConfig(level=logging.INFO)
@@ -22,6 +22,7 @@ app.include_router(tasks.router)
 app.include_router(acestep.router)
 app.include_router(files.router)
 app.include_router(suno.router)
+app.include_router(gemini.router)
 
 @app.get("/")
 async def root():

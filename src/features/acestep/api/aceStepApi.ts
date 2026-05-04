@@ -5,7 +5,32 @@ export const aceStepApi = {
   /**
    * Start ACE-Step generation task
    */
-  generate: async (params: Partial<AceStepState>) => {
+  generate: async (state: Partial<AceStepState> & { src_audio_path?: string | null, reference_audio_path?: string | null }) => {
+    // P1-1: Convert camelCase to snake_case for backend compatibility
+    const params = {
+      prompt: state.prompt,
+      lyrics: state.lyrics,
+      thinking: state.thinking,
+      inference_steps: state.inference_steps,
+      guidance_scale: state.guidance_scale,
+      use_random_seed: state.useRandomSeed,
+      seed: state.seed,
+      batch_size: state.batch_size,
+      duration: state.duration,
+      language: state.language,
+      model: state.model,
+      sample_mode: state.sample_mode,
+      sample_query: state.sample_query,
+      task_type: state.task_type,
+      audio_cover_strength: state.audio_cover_strength,
+      repainting_start: state.repainting_start,
+      repainting_end: state.repainting_end,
+      src_audio_path: state.src_audio_path,
+      use_adg: state.useAdg,
+      reference_audio_path: state.reference_audio_path,
+      track_name: state.legoTrackName,
+    };
+    
     return apiClient.post<{ task_id: string }>('/acestep/generate', params);
   },
 
@@ -56,18 +81,16 @@ export const aceStepApi = {
   /**
    * Post-process (Fade/Trim) audio
    */
-  postProcess: async (fileUrl: string, options: { fade_duration: number; auto_trim: boolean }) => {
-    return apiClient.post<any>('/acestep/post-process', {
-      file_url: fileUrl,
-      ...options
-    });
+  postProcess: async (params: { file_url: string; fade_duration: number; auto_trim: boolean }) => {
+    return apiClient.post<any>('/acestep/post-process', params);
   },
 
   /**
    * Start separation (for Voice Change)
    */
-  separate: async (filePath: string) => {
-    return apiClient.post<{ task_id: string }>('/acestep/separate', { file_path: filePath });
+  separate: async (fileUrl: string) => {
+    // P0-4: Backend expects file_url
+    return apiClient.post<{ task_id: string }>('/acestep/separate', { file_url: fileUrl });
   },
 
   /**

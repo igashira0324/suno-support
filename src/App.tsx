@@ -8,6 +8,7 @@ import AceStepTab from './components/AceStepTab';
 import MvProductionTab from './components/MvProductionTab';
 import VocalStudioTab from './components/VocalStudioTab';
 import { AudioWaveform as Waveform, Sparkles, AlertCircle, Wand2, Music, Settings, Info, Video, AudioLines } from 'lucide-react';
+import { toApiUrl } from './api/client';
 
 const App: React.FC = () => {
     const [activeTab, setActiveTab] = useState<'prompt' | 'yue' | 'ace' | 'mv' | 'vocal'>('vocal');
@@ -113,7 +114,7 @@ const App: React.FC = () => {
         }));
 
         try {
-            const response = await fetch('http://localhost:8100/acestep/minimax/generate', {
+            const response = await fetch(toApiUrl('/acestep/minimax/generate'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ lyrics: content, prompt: style })
@@ -130,7 +131,7 @@ const App: React.FC = () => {
             finalSelections[index] = {
                 ...finalSelections[index],
                 isMinimaxGenerating: false,
-                minimaxAudioUrl: `http://localhost:8100${data.audio_url}`,
+                minimaxAudioUrl: toApiUrl(data.audio_url),
                 minimaxError: null
             };
 

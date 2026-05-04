@@ -3,6 +3,7 @@ import { Upload, Music, Mic2, MicOff, Loader2, Play, Pause, Download, AlertCircl
 import WaveSurfer from 'wavesurfer.js';
 import RegionsPlugin from 'wavesurfer.js/dist/plugins/regions.esm.js';
 import TimelinePlugin from 'wavesurfer.js/dist/plugins/timeline.esm.js';
+import { toApiUrl } from '../api/client';
 
 interface SeparationResult {
     vocals_url: string;
@@ -184,14 +185,12 @@ const MvProductionTab: React.FC = () => {
 
     const getTrackUrl = (type: TrackType) => {
         if (!state.result) return '';
-        const baseUrl = 'http://localhost:8100';
         switch (type) {
-            case 'vocals': return state.result.vocals_url ? `${baseUrl}${state.result.vocals_url}` : '';
-            case 'instrumental': return state.result.instrumental_url ? `${baseUrl}${state.result.instrumental_url}` : '';
+            case 'vocals': return toApiUrl(state.result.vocals_url);
+            case 'instrumental': return toApiUrl(state.result.instrumental_url);
             case 'original':
             default:
-                if (state.result.original_path?.startsWith('http')) return state.result.original_path;
-                return state.result.original_path ? `${baseUrl}${state.result.original_path}` : '';
+                return toApiUrl(state.result.original_path);
         }
     };
 
@@ -392,7 +391,7 @@ const MvProductionTab: React.FC = () => {
         if (!state.id || isCancelling) return;
         setIsCancelling(true);
         try {
-            await fetch(`http://localhost:8100/task/${state.id}/cancel`, { method: 'POST' });
+            await fetch(toApiUrl(`/task/${state.id}/cancel`), { method: 'POST' });
             if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
             setState(prev => ({ ...prev, status: 'cancelled', progress: 0 }));
             // Optional: wait a bit then go back to idle? Or stay in cancelled state?
@@ -430,7 +429,7 @@ const MvProductionTab: React.FC = () => {
 
         setIsAnalyzing(true);
         try {
-            const response = await fetch('http://localhost:8100/analyze', {
+            const response = await fetch(toApiUrl('/analyze'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ file_path: trackUrl })
@@ -464,7 +463,7 @@ const MvProductionTab: React.FC = () => {
     // CLAP Search Functions
     const loadClapPresets = async () => {
         try {
-            const response = await fetch('http://localhost:8100/clap/presets');
+            const response = await fetch(toApiUrl('/clap/presets'));
             if (response.ok) {
                 const data = await response.json();
                 setClapPresets(data.presets || []);
@@ -490,7 +489,7 @@ const MvProductionTab: React.FC = () => {
         setIsSearching(true);
         setClapResults([]);
         try {
-            const response = await fetch('http://localhost:8100/clap/search', {
+            const response = await fetch(toApiUrl('/clap/search'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -539,7 +538,7 @@ const MvProductionTab: React.FC = () => {
             formData.append('start_time', selectedRegion.start.toString());
             formData.append('end_time', selectedRegion.end.toString());
 
-            const response = await fetch('http://localhost:8100/trim', {
+            const response = await fetch(toApiUrl('/trim'), {
                 method: 'POST',
                 body: formData,
             });
@@ -601,7 +600,7 @@ const MvProductionTab: React.FC = () => {
         formData.append('file', file);
 
         try {
-            const response = await fetch('http://localhost:8100/separate', {
+            const response = await fetch(toApiUrl('/separate'), {
                 method: 'POST',
                 body: formData
             });
@@ -626,7 +625,7 @@ const MvProductionTab: React.FC = () => {
         setSelectedRegion(null);
 
         try {
-            const response = await fetch('http://localhost:8100/separate-url', {
+            const response = await fetch(toApiUrl('/separate-url'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ url: importUrl })
@@ -648,7 +647,7 @@ const MvProductionTab: React.FC = () => {
         if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
         pollIntervalRef.current = setInterval(async () => {
             try {
-                const response = await fetch(`http://localhost:8100/task/${taskId}?t=${Date.now()}`);
+                const response = await fetch(toApiUrl(`/task/${taskId}?t=${Date.now()}`));
                 if (!response.ok) throw new Error('Task not found');
                 const data = await response.json();
 
@@ -703,7 +702,7 @@ const MvProductionTab: React.FC = () => {
             formData.append('f0_condition', voiceChange.f0Condition.toString());
             formData.append('auto_f0_adjust', voiceChange.autoF0Adjust.toString());
 
-            const res = await fetch('http://localhost:8100/voice-convert', {
+            const res = await fetch(toApiUrl('/voice-convert'), {
                 method: 'POST',
                 body: formData
             });
@@ -715,7 +714,7 @@ const MvProductionTab: React.FC = () => {
             if (vcPollRef.current) clearInterval(vcPollRef.current);
             vcPollRef.current = setInterval(async () => {
                 try {
-                    const statusRes = await fetch(`http://localhost:8100/task/${data.task_id}`);
+                    const statusRes = await fetch(toApiUrl(`/task/${data.task_id}`));
                     if (!statusRes.ok) return;
                     const statusData = await statusRes.json();
                     setVoiceChange(prev => ({ ...prev, progress: statusData.progress || 0 }));
@@ -726,7 +725,7 @@ const MvProductionTab: React.FC = () => {
                             ...prev,
                             status: 'done',
                             progress: 100,
-                            mergedUrl: `http://localhost:8100${statusData.result?.merged_url}`,
+                            mergedUrl: toApiUrl(statusData.result?.merged_url),
                             processingTime: statusData.result?.processing_time
                         }));
                     } else if (statusData.status === 'failed') {
@@ -1279,8 +1278,8 @@ const MvProductionTab: React.FC = () => {
 
                         <div className="grid grid-cols-2 gap-4">
                             <a
-                                href={state.result?.vocals_url ? `http://localhost:8100${state.result.vocals_url}` : '#'}
-                                onClick={(e) => state.result?.vocals_url && handleDownloadFile(e, `http://localhost:8100${state.result.vocals_url}`, 'vocals.wav')}
+                                href={state.result?.vocals_url ? toApiUrl(state.result.vocals_url) : '#'}
+                                onClick={(e) => state.result?.vocals_url && handleDownloadFile(e, toApiUrl(state.result.vocals_url), 'vocals.wav')}
                                 className={`flex items-center justify-between p-4 bg-indigo-500/5 border border-indigo-500/10 rounded-2xl hover:bg-indigo-500/10 hover:border-indigo-500/30 transition-all text-indigo-300 group cursor-pointer ${isDownloading ? 'opacity-50 pointer-events-none' : ''}`}
                             >
                                 <span className="flex items-center gap-2 font-bold text-sm">
@@ -1289,8 +1288,8 @@ const MvProductionTab: React.FC = () => {
                                 <Download className="w-4 h-4 opacity-50 group-hover:opacity-100 transition-opacity" />
                             </a>
                             <a
-                                href={state.result?.instrumental_url ? `http://localhost:8100${state.result.instrumental_url}` : '#'}
-                                onClick={(e) => state.result?.instrumental_url && handleDownloadFile(e, `http://localhost:8100${state.result.instrumental_url}`, 'instrumental.wav')}
+                                href={state.result?.instrumental_url ? toApiUrl(state.result.instrumental_url) : '#'}
+                                onClick={(e) => state.result?.instrumental_url && handleDownloadFile(e, toApiUrl(state.result.instrumental_url), 'instrumental.wav')}
                                 className={`flex items-center justify-between p-4 bg-violet-500/5 border border-violet-500/10 rounded-2xl hover:bg-violet-500/10 hover:border-violet-500/30 transition-all text-violet-300 group cursor-pointer ${isDownloading ? 'opacity-50 pointer-events-none' : ''}`}
                             >
                                 <span className="flex items-center gap-2 font-bold text-sm">

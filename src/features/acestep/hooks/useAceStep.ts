@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { AceStepState, VoiceChangeState, AceStepTaskType } from '../types';
+import { GenerationMode } from '../../../types';
 import { aceStepApi as acestepApi } from '../api/aceStepApi';
+import { toApiUrl } from '../../../api/client';
 import { generateSunoPrompt, generateTitle, structureLyrics, generateStyleFromLyrics } from '../../../services/geminiService';
 
 export const useAceStep = () => {
@@ -143,7 +145,7 @@ export const useAceStep = () => {
                                     ...prev,
                                     output_files: [{
                                         ...data.output_files[0],
-                                        url: `http://localhost:8100${postData.url}`,
+                                        url: toApiUrl(postData.url),
                                         label: `Processed (Trimmed & Faded)`
                                     }, ...prev.output_files]
                                 }));
@@ -237,12 +239,12 @@ export const useAceStep = () => {
                             ...prev,
                             status: 'ready',
                             progress: 100,
-                            instrumentalUrl: `http://localhost:8100${statusData.result?.vocals_url?.replace('vocals.wav', 'instrumental.wav')}`, // Fallback if backend doesn't provide full URL
-                            vocalsUrl: `http://localhost:8100${statusData.result?.vocals_url}`
+                            instrumentalUrl: toApiUrl(statusData.result?.vocals_url?.replace('vocals.wav', 'instrumental.wav')), // Fallback if backend doesn't provide full URL
+                            vocalsUrl: toApiUrl(statusData.result?.vocals_url)
                         }));
                         // Fix for instrumental URL if not explicitly returned
                         if (statusData.result?.instrumental_url) {
-                            setVoiceChange(prev => ({ ...prev, instrumentalUrl: `http://localhost:8100${statusData.result.instrumental_url}` }));
+                            setVoiceChange(prev => ({ ...prev, instrumentalUrl: toApiUrl(statusData.result.instrumental_url) }));
                         }
                     } else if (statusData.status === 'failed') {
                         if (vcPollRef.current) clearInterval(vcPollRef.current);
@@ -283,7 +285,7 @@ export const useAceStep = () => {
                             ...prev,
                             status: 'done',
                             progress: 100,
-                            mergedUrl: `http://localhost:8100${statusData.result?.merged_url}`,
+                            mergedUrl: toApiUrl(statusData.result?.merged_url),
                             processingTime: statusData.result?.processing_time
                         }));
                     } else if (statusData.status === 'failed') {

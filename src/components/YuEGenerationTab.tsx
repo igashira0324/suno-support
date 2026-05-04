@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Play, Pause, Download, Music, AlertCircle, Loader2, FileAudio } from 'lucide-react';
+import { toApiUrl } from '../api/client';
 
 interface YuEState {
     title: string;
@@ -60,7 +61,7 @@ const YuEGenerationTab: React.FC = () => {
         formData.append("language", state.language);
 
         try {
-            const response = await fetch("http://localhost:8100/yue/generate", {
+            const response = await fetch(toApiUrl("/yue/generate"), {
                 method: "POST",
                 body: formData
             });
@@ -82,7 +83,7 @@ const YuEGenerationTab: React.FC = () => {
 
         pollIntervalRef.current = setInterval(async () => {
             try {
-                const res = await fetch(`http://localhost:8100/yue/status/${jobId}`);
+                const res = await fetch(toApiUrl(`/yue/status/${jobId}`));
                 const data = await res.json();
 
                 setState(prev => ({
@@ -290,9 +291,9 @@ const YuEGenerationTab: React.FC = () => {
                                             <span className="text-xs text-slate-500 font-mono bg-slate-900/50 px-2 py-1 rounded w-fit">{state.jobId}</span>
                                         </div>
                                         <div className="flex items-center gap-4 w-full md:w-auto">
-                                            <audio controls src={`http://localhost:8100/outputs/yue_generations/${state.jobId}/${file}`} className="h-12 w-full md:w-[400px] shadow-md rounded-full" />
+                                            <audio controls src={toApiUrl(`/outputs/yue_generations/${state.jobId}/${file}`)} className="h-12 w-full md:w-[400px] shadow-md rounded-full" />
                                             <a
-                                                href={`http://localhost:8100/outputs/yue_generations/${state.jobId}/${file}`}
+                                                href={toApiUrl(`/outputs/yue_generations/${state.jobId}/${file}`)}
                                                 download={file}
                                                 className="p-3 bg-indigo-600 hover:bg-indigo-500 rounded-full text-white transition-colors shadow-lg shadow-indigo-500/30"
                                                 title={`Download ${file}`}

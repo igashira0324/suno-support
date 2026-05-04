@@ -101,5 +101,13 @@ class ApiClient {
   }
 }
 
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8100';
+
+export const toApiUrl = (url?: string | null) => {
+  if (!url) return '';
+  if (url.startsWith('http')) return url;
+  return `${API_BASE_URL}${url.startsWith('/') ? url : `/${url}`}`;
+};
+
 export const apiClient = new ApiClient(API_BASE_URL);
 export default apiClient;

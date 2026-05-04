@@ -20,6 +20,7 @@ export interface AceStepState {
     imageFile: File | null;
     isAnalyzing: boolean;
     theme: string;
+    generatedTitle?: string;
     seed: number;
     task_type: AceStepTaskType;
     coverAudioSourceType: 'upload' | 'url';
