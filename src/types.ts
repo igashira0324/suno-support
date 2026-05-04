@@ -10,7 +10,11 @@ export enum GenerationMode {
     INSTRUMENTAL = 'INSTRUMENTAL'
 }
 
-export type GeminiModel = 'gemini-3-flash-preview' | 'gemini-3.1-pro-preview';
+export type GeminiModel =
+    | 'gemini-3-flash-preview'
+    | 'gemini-3.1-pro-preview'
+    | 'gemini-2.5-flash'
+    | 'gemini-2.5-pro';
 
 export type LyricsLanguage = 'Japanese' | 'English';
 

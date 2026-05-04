@@ -67,8 +67,10 @@ export const InputSettingsPanel: React.FC<InputSettingsPanelProps> = ({
                         onChange={(e) => onModelChange(e.target.value)}
                         className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-base text-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none"
                     >
-                        <option value="gemini-3-flash-preview">Gemini 3 Flash (推奨・最高コスパ)</option>
-                        <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro (高精度・多機能)</option>
+                        <option value="gemini-3-flash-preview">Gemini 3 Flash Preview (推奨・高速・高性能)</option>
+                        <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro Preview (高精度・高コスト)</option>
+                        <option value="gemini-2.5-flash">Gemini 2.5 Flash (安定版フォールバック)</option>
+                        <option value="gemini-2.5-pro">Gemini 2.5 Pro (安定版・高精度)</option>
                     </select>
                 </div>
 

@@ -43,6 +43,7 @@ export interface AceStepState {
     shift: number;
     guidance_scale: number;
     infer_method: 'ode' | 'euler';
+    stylePreset: 'none' | 'suno' | 'realistic' | 'vintage';
     startTime?: number;
     processingTime?: number;
 }

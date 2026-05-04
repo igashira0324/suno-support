@@ -13,15 +13,52 @@ if settings.gemini_api_key:
     genai.configure(api_key=settings.gemini_api_key)
 
 def normalize_model_name(model_name: Optional[str]) -> str:
-    """Fallback logic for model names."""
+    """Normalize UI model names to Gemini API supported model names."""
     if not model_name:
-        return "gemini-1.5-flash"
-    
-    # ユーザーがgemini-3系を選択した場合、API側で対応している1.5 Pro等にフォールバック
-    if "gemini-3" in model_name:
-        return "gemini-1.5-pro"
-        
-    return model_name
+        return "gemini-3-flash-preview"
+
+    model_map = {
+        # Current recommended Gemini 3 models
+        "gemini-3-flash": "gemini-3-flash-preview",
+        "gemini-3-flash-preview": "gemini-3-flash-preview",
+
+        "gemini-3.1-pro": "gemini-3.1-pro-preview",
+        "gemini-3.1-pro-preview": "gemini-3.1-pro-preview",
+
+        "gemini-3.1-flash-lite": "gemini-3.1-flash-lite-preview",
+        "gemini-3.1-flash-lite-preview": "gemini-3.1-flash-lite-preview",
+
+        # Stable fallback models
+        "gemini-2.5-flash": "gemini-2.5-flash",
+        "gemini-2.5-pro": "gemini-2.5-pro",
+
+        # Legacy aliases
+        "gemini-1.5-flash": "gemini-2.5-flash",
+        "gemini-1.5-pro": "gemini-2.5-pro",
+    }
+
+    return model_map.get(model_name, "gemini-3-flash-preview")
+
+async def generate_content_with_fallback(
+    model_name: str,
+    prompt_parts: Any,
+    generation_config: Optional[Dict] = None,
+    system_instruction: Optional[str] = None
+) -> Any:
+    """Generates content with an automatic fallback to gemini-2.5-flash if the primary model fails."""
+    try:
+        model = genai.GenerativeModel(model_name=model_name, system_instruction=system_instruction)
+        return await model.generate_content_async(prompt_parts, generation_config=generation_config)
+    except Exception as e:
+        error_msg = str(e).lower()
+        if "404" in error_msg or "not found" in error_msg or "not supported" in error_msg or "permission_denied" in error_msg:
+            logger.warning(f"Primary model {model_name} failed: {e}. Falling back to gemini-2.5-flash.")
+            # Ensure we don't try to use pro if flash is already being requested
+            if model_name == "gemini-2.5-flash":
+                raise e
+            model = genai.GenerativeModel(model_name="gemini-2.5-flash", system_instruction=system_instruction)
+            return await model.generate_content_async(prompt_parts, generation_config=generation_config)
+        raise e
 
 def ensure_gemini_configured():
     """Check if Gemini API key is configured."""
@@ -105,14 +142,9 @@ async def generate_suno_prompt(
 ) -> Dict[str, Any]:
     ensure_gemini_configured()
     if options is None:
-        options = {"searchEngine": "none", "modelName": "gemini-1.5-flash", "lyricsLanguage": "Japanese"}
+        options = {"searchEngine": "none", "modelName": "gemini-3-flash-preview", "lyricsLanguage": "Japanese"}
     
     model_name = normalize_model_name(options.get("modelName"))
-
-    model = genai.GenerativeModel(
-        model_name=model_name,
-        system_instruction=SYSTEM_INSTRUCTION
-    )
 
     prompt_parts = []
     
@@ -155,9 +187,11 @@ async def generate_suno_prompt(
     max_retries = 3
     for attempt in range(max_retries):
         try:
-            response = await model.generate_content_async(
-                prompt_parts,
-                generation_config=generation_config
+            response = await generate_content_with_fallback(
+                model_name=model_name,
+                prompt_parts=prompt_parts,
+                generation_config=generation_config,
+                system_instruction=SYSTEM_INSTRUCTION
             )
             return json.loads(response.text)
         except json.JSONDecodeError as e:
@@ -177,20 +211,16 @@ async def generate_suno_prompt(
 async def structure_lyrics(
     raw_lyrics: str,
     language: str = "ja",
-    model_name: str = "gemini-1.5-flash"
+    model_name: str = "gemini-3-flash-preview"
 ) -> str:
     ensure_gemini_configured()
     model_name = normalize_model_name(model_name)
-    model = genai.GenerativeModel(model_name=model_name)
-    
     instruction = """You are a lyrics formatter specialized for Suno AI.
 Your task is to structure raw lyrics into a format optimized for music generation.
 Output ONLY the tagged lyrics. No explanations.
 """
-    
     prompt = f"{instruction}\n\nLyrics to format:\n{raw_lyrics}"
-    
-    response = await model.generate_content_async(prompt)
+    response = await generate_content_with_fallback(model_name, prompt)
     return response.text.strip()
 
 async def generate_from_selected_title(
@@ -201,13 +231,9 @@ async def generate_from_selected_title(
 ) -> Dict[str, Any]:
     ensure_gemini_configured()
     if options is None:
-        options = {"modelName": "gemini-1.5-flash", "lyricsLanguage": "Japanese"}
+        options = {"modelName": "gemini-3-flash-preview", "lyricsLanguage": "Japanese"}
     
     model_name = normalize_model_name(options.get("modelName"))
-    model = genai.GenerativeModel(
-        model_name=model_name,
-        system_instruction=SYSTEM_INSTRUCTION
-    )
 
     style_candidates_text = "\n".join(style_candidates)
 
@@ -243,9 +269,11 @@ async def generate_from_selected_title(
     max_retries = 3
     for attempt in range(max_retries):
         try:
-            response = await model.generate_content_async(
-                prompt,
-                generation_config=generation_config
+            response = await generate_content_with_fallback(
+                model_name=model_name,
+                prompt_parts=prompt,
+                generation_config=generation_config,
+                system_instruction=SYSTEM_INSTRUCTION
             )
             data = json.loads(response.text)
             data["bestSelection"]["title"] = selected_title
@@ -269,21 +297,18 @@ async def generate_title(
     lyrics: str,
     theme: str,
     prompt: str,
-    model_name: str = "gemini-1.5-flash"
+    model_name: str = "gemini-3-flash-preview"
 ) -> str:
     ensure_gemini_configured()
     model_name = normalize_model_name(model_name)
-    model = genai.GenerativeModel(model_name=model_name)
-    
     instruction = """
         You are a visionary music producer and poet.
         Your task is to create a compelling, bilingual title for a song based on its lyrics, theme, and musical style.
         Return ONLY the title in "Japanese Title / English Title" format.
     """
-    
     user_content = f"Theme: {theme}\nStyle/Prompt: {prompt}\nLyrics: {lyrics[:1000]}"
     
-    response = await model.generate_content_async(f"{instruction}\n\n{user_content}")
+    response = await generate_content_with_fallback(model_name, f"{instruction}\n\n{user_content}")
     return response.text.strip()
 
 async def generate_style_from_lyrics(
@@ -291,13 +316,12 @@ async def generate_style_from_lyrics(
     url: str = "",
     theme: str = "",
     language: str = "ja",
-    model_name: str = "gemini-1.5-flash"
+    model_name: str = "gemini-3-flash-preview"
 ) -> str:
     ensure_gemini_configured()
     model_name = normalize_model_name(model_name)
-    model = genai.GenerativeModel(model_name=model_name)
     prompt = f"Generate a Suno style prompt (comma-separated tags) for these lyrics:\n{lyrics[:1000]}\nTheme: {theme}\nURL Info: {url}"
-    response = await model.generate_content_async(prompt)
+    response = await generate_content_with_fallback(model_name, prompt)
     return response.text.strip()
 
 async def llm_proxy(body: Dict[str, Any]) -> Dict[str, Any]:
@@ -309,13 +333,7 @@ async def llm_proxy(body: Dict[str, Any]) -> Dict[str, Any]:
     messages = body.get("messages", [])
     system_instruction = body.get("system_instruction", SYSTEM_INSTRUCTION)
     
-    # Simple proxy implementation
-    model = genai.GenerativeModel(
-        model_name=model_name,
-        system_instruction=system_instruction
-    )
-    
-    # Convert message format if needed (Gemini expects history)
+    # Convert message format
     history = []
     current_message = ""
     for msg in messages:
@@ -326,9 +344,19 @@ async def llm_proxy(body: Dict[str, Any]) -> Dict[str, Any]:
             history.append({"role": "model", "parts": [msg["content"]]})
             current_message = ""
             
+    # Proxy implementation using fallback logic
     if current_message:
-        chat = model.start_chat(history=history)
-        response = await chat.send_message_async(current_message)
+        # Convert history for chat
+        prompt_parts = []
+        for h in history:
+            prompt_parts.extend(h["parts"])
+        prompt_parts.append(current_message)
+        
+        response = await generate_content_with_fallback(
+            model_name=model_name,
+            prompt_parts=prompt_parts,
+            system_instruction=system_instruction
+        )
         return {"content": response.text}
     
     return {"error": "No user message found"}

@@ -23,7 +23,6 @@ class Settings(BaseSettings):
     output_dir: Path = project_dir / "outputs"
     
     # Specific Output Dirs
-    yue_output_dir: Path = output_dir / "yue_generations"
     separation_dir: Path = output_dir / "separated"
     minimax_output_dir: Path = output_dir / "minimax"
 
@@ -35,7 +34,7 @@ class Settings(BaseSettings):
 
     def create_directories(self):
         """Ensure all required directories exist."""
-        for path in [self.upload_dir, self.output_dir, self.yue_output_dir, self.separation_dir, self.minimax_output_dir]:
+        for path in [self.upload_dir, self.output_dir, self.separation_dir, self.minimax_output_dir]:
             path.mkdir(parents=True, exist_ok=True)
 
 settings = Settings()

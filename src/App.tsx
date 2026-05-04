@@ -3,7 +3,6 @@ import { SunoResponse, AppState, MediaType, GenerationMode } from './types';
 import { generateSunoPrompt } from './services/geminiService';
 import InputSection from './features/input/components/InputSection';
 import ResultSection from './features/results/components/ResultSection';
-import YuEGenerationTab from './components/YuEGenerationTab';
 import AceStepTab from './components/AceStepTab';
 import MvProductionTab from './components/MvProductionTab';
 import VocalStudioTab from './features/vocal-studio/components/VocalStudioTab';
@@ -11,7 +10,7 @@ import { AudioWaveform as Waveform, Sparkles, AlertCircle, Wand2, Music, Setting
 import { toApiUrl } from './api/client';
 
 const App: React.FC = () => {
-    const [activeTab, setActiveTab] = useState<'prompt' | 'yue' | 'ace' | 'mv' | 'vocal'>('prompt');
+    const [activeTab, setActiveTab] = useState<'prompt' | 'ace' | 'mv' | 'vocal'>('prompt');
     const [state, setState] = useState<AppState>({
         inputText: '',
         youtubeUrl: '',
@@ -182,16 +181,7 @@ const App: React.FC = () => {
                             <Wand2 className="w-4 h-4" />
                             Prompt Gen
                         </button>
-                        <button
-                            onClick={() => setActiveTab('yue')}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'yue'
-                                ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/20'
-                                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                                }`}
-                        >
-                            <Music className="w-4 h-4" />
-                            YuE Generate
-                        </button>
+
                         <button
                             onClick={() => setActiveTab('ace')}
                             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'ace'
@@ -272,9 +262,7 @@ const App: React.FC = () => {
                         />
                     )}
                 </div>
-                <div style={{ display: activeTab === 'yue' ? 'block' : 'none' }}>
-                    <YuEGenerationTab />
-                </div>
+
                 <div style={{ display: activeTab === 'ace' ? 'block' : 'none' }}>
                     <AceStepTab />
                 </div>
@@ -289,7 +277,7 @@ const App: React.FC = () => {
             {/* Footer */}
             <footer className="border-t border-white/5 py-4 bg-black/20">
                 <div className="max-w-7xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between text-slate-600 text-[10px] uppercase tracking-widest font-bold">
-                    <p className="flex items-center gap-2"><Sparkles className="w-3 h-3" /> Powered by Gemini & YuE-s1</p>
+                    <p className="flex items-center gap-2"><Sparkles className="w-3 h-3" /> Powered by Gemini & ACE-Step</p>
                     <p>© 2026 Suno Architect Suite</p>
                 </div>
             </footer>

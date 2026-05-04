@@ -48,6 +48,7 @@ export const useAceStep = () => {
         shift: 1.0,
         guidance_scale: 7.0,
         infer_method: 'ode',
+        stylePreset: 'none',
         startTime: undefined,
         processingTime: undefined
     });
@@ -188,8 +189,19 @@ export const useAceStep = () => {
                 }
             }
 
+            // Apply style presets to prompt if selected
+            let finalPrompt = state.prompt;
+            if (state.stylePreset === 'suno') {
+                finalPrompt = `[Suno v4 Style] ${finalPrompt}`;
+            } else if (state.stylePreset === 'realistic') {
+                finalPrompt = `[High Fidelity, Studio Quality] ${finalPrompt}`;
+            } else if (state.stylePreset === 'vintage') {
+                finalPrompt = `[Lo-Fi, Analog Warmth, 90s Aesthetic] ${finalPrompt}`;
+            }
+
             const data = await acestepApi.generate({
                 ...state,
+                prompt: finalPrompt,
                 src_audio_path: srcAudioPath,
                 reference_audio_path: (state.useAdg && srcAudioPath) ? srcAudioPath : null
             });
