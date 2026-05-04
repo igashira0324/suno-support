@@ -46,6 +46,8 @@ export interface AceStepState {
     stylePreset: 'none' | 'suno' | 'realistic' | 'vintage';
     startTime?: number;
     processingTime?: number;
+    isAceStepReady: boolean;
+    healthError: string | null;
 }
 
 export interface VoiceChangeState {

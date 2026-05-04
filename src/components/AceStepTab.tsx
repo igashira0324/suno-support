@@ -121,6 +121,8 @@ const AceStepTab: React.FC = () => {
                             setState={setState}
                             onGenerate={handleGenerate}
                             visualProgress={visualProgress}
+                            isAceStepReady={state.isAceStepReady}
+                            healthError={state.healthError}
                         />
 
                         <ImageSection

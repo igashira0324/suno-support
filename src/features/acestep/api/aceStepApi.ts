@@ -105,5 +105,13 @@ export const aceStepApi = {
    */
   getTaskStatus: async (taskId: string) => {
     return apiClient.get<any>(`/task/${taskId}`);
+  },
+  
+  /**
+   * Check ACE-Step health/readiness
+   */
+  health: async () => {
+    return apiClient.get<any>('/acestep/health');
   }
 };
+

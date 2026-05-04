@@ -12,6 +12,7 @@ import sys
 import time
 import io
 from pathlib import Path
+from urllib.parse import quote, unquote
 from typing import Optional, List, Dict
 from fastapi import APIRouter, UploadFile, File, HTTPException, Body, Request, Form, BackgroundTasks
 from pydantic import BaseModel
@@ -43,6 +44,8 @@ def to_web_path(path: Path) -> str:
 logger = logging.getLogger("SunoArchitect.AceStep")
 
 router = APIRouter(prefix="/acestep", tags=["acestep"])
+ACESTEP_LOCAL_DIR = settings.output_dir / "acestep_generated"
+ACESTEP_LOCAL_DIR.mkdir(parents=True, exist_ok=True)
 
 @router.get("/health")
 async def acestep_health():
@@ -392,7 +395,11 @@ async def acestep_generate(request: AceStepRequest):
     )
     if "error" in result and result["error"]:
         logger.error(f"ACE-Step generation error: {result['error']}")
-        raise HTTPException(status_code=500, detail=result["error"])
+        # P2: Use 503 if starting up or explicitly specified by service
+        status_code = result.get("code", 500)
+        if "starting up" in result["error"].lower() or "loading" in result["error"].lower():
+            status_code = 503
+        raise HTTPException(status_code=status_code, detail=result["error"])
     
     # Normalize response shape for frontend
     # Expected: { "task_id": "..." }
@@ -497,6 +504,52 @@ async def get_acestep_status(task_id: str):
 
             elif "output_files" in res_data:
                 files = res_data.get("output_files") or []
+
+        # P3: Localize generated files to Backend outputs to prevent link breakage
+        localized_files = []
+        task_output_dir = ACESTEP_LOCAL_DIR / task_id
+        
+        for idx, f in enumerate(files):
+            raw_url = f.get("url") if isinstance(f, dict) else f
+            label = f.get("label", "Generated Audio") if isinstance(f, dict) else "Generated Audio"
+            
+            if not raw_url: continue
+            
+            # If already localized, skip
+            if "/outputs/acestep_generated/" in str(raw_url):
+                localized_files.append(f)
+                continue
+
+            actual_path = None
+            if "path=" in str(raw_url):
+                try:
+                    actual_path = raw_url.split("path=")[1]
+                    actual_path = unquote(actual_path)
+                except: actual_path = None
+            elif str(raw_url).startswith("/") or re.match(r"^[A-Za-z]:\\", str(raw_url)):
+                actual_path = raw_url
+            
+            if actual_path and os.path.exists(actual_path):
+                task_output_dir.mkdir(parents=True, exist_ok=True)
+                ext = Path(actual_path).suffix or ".mp3"
+                local_filename = f"generated_{idx}{ext}"
+                local_dest = task_output_dir / local_filename
+                
+                try:
+                    if not local_dest.exists():
+                        shutil.copy2(actual_path, local_dest)
+                    
+                    localized_files.append({
+                        "url": f"/outputs/acestep_generated/{task_id}/{local_filename}",
+                        "label": label
+                    })
+                except Exception as copy_err:
+                    logger.error(f"Failed to localize ACE-Step file: {copy_err}")
+                    localized_files.append(f)
+            else:
+                localized_files.append(f)
+        
+        output_files = localized_files
 
             elif "files" in res_data:
                 files = res_data.get("files") or []

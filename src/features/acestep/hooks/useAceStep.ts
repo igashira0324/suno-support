@@ -50,7 +50,9 @@ export const useAceStep = () => {
         infer_method: 'ode',
         stylePreset: 'none',
         startTime: undefined,
-        processingTime: undefined
+        processingTime: undefined,
+        isAceStepReady: false,
+        healthError: null
     });
 
     const [visualProgress, setVisualProgress] = useState(0);
@@ -81,6 +83,27 @@ export const useAceStep = () => {
             if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
             if (vcPollRef.current) clearInterval(vcPollRef.current);
         };
+    }, []);
+    
+    // P1: Periodic Health Check for ACE-Step readiness
+    useEffect(() => {
+        const checkHealth = async () => {
+            try {
+                await acestepApi.health();
+                setState(prev => ({ ...prev, isAceStepReady: true, healthError: null }));
+            } catch (err: any) {
+                const isLoading = err.status === 503 || err.message?.includes('starting up');
+                setState(prev => ({ 
+                    ...prev, 
+                    isAceStepReady: false, 
+                    healthError: isLoading ? 'ACE-Step 起動中...' : 'ACE-Step 接続エラー' 
+                }));
+            }
+        };
+
+        checkHealth();
+        const interval = setInterval(checkHealth, 10000); // Check every 10s
+        return () => clearInterval(interval);
     }, []);
 
     // Smooth progress simulation
@@ -171,6 +194,19 @@ export const useAceStep = () => {
     }, [state.task_type, state.autoTrim, state.fadeDuration]);
 
     const handleGenerate = async () => {
+        // P1: Pre-generation health check
+        try {
+            await acestepApi.health();
+        } catch (err: any) {
+            setState(prev => ({ 
+                ...prev, 
+                isGenerating: false, 
+                status: 'failed', 
+                error: 'ACE-Step is still starting or unreachable. Please wait 1-2 minutes and try again.' 
+            }));
+            return;
+        }
+
         setState(prev => ({ ...prev, isGenerating: true, status: 'starting', progress: 0, error: null, startTime: Date.now() }));
         setVisualProgress(0);
 

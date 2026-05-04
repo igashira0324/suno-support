@@ -25,9 +25,18 @@ interface SettingsSectionProps {
     setState: React.Dispatch<React.SetStateAction<AceStepState>>;
     onGenerate: () => void;
     visualProgress: number;
+    isAceStepReady?: boolean;
+    healthError?: string | null;
 }
 
-export const SettingsSection: React.FC<SettingsSectionProps> = ({ state, setState, onGenerate, visualProgress }) => {
+export const SettingsSection: React.FC<SettingsSectionProps> = ({ 
+    state, 
+    setState, 
+    onGenerate, 
+    visualProgress,
+    isAceStepReady = true,
+    healthError = null
+}) => {
     const [showAdvanced, setShowAdvanced] = useState(false);
 
     const getModeDescription = (mode: string) => {
@@ -390,15 +399,22 @@ export const SettingsSection: React.FC<SettingsSectionProps> = ({ state, setStat
                 {/* Generate Button */}
                 <button
                     onClick={onGenerate}
-                    disabled={state.isGenerating}
+                    disabled={state.isGenerating || !isAceStepReady}
                     className="relative w-full group overflow-hidden rounded-xl p-px transition-transform active:scale-[0.98]"
                 >
-                    <div className={`absolute inset-0 bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 animate-gradient-x ${state.isGenerating ? 'opacity-50' : ''}`}></div>
+                    <div className={`absolute inset-0 bg-gradient-to-r ${!isAceStepReady ? 'from-slate-700 to-slate-800' : 'from-indigo-600 via-purple-600 to-pink-600'} animate-gradient-x ${state.isGenerating || !isAceStepReady ? 'opacity-50' : ''}`}></div>
                     <div className="relative bg-slate-950 rounded-[11px] py-4 flex flex-col items-center justify-center gap-1 group-hover:bg-transparent transition-all duration-300">
                         {state.isGenerating ? (
                             <>
                                 <Loader2 className="w-5 h-5 text-white animate-spin" />
                                 <span className="text-[10px] font-black uppercase tracking-widest text-white/90">Synthesizing {Math.round(visualProgress)}%</span>
+                            </>
+                        ) : !isAceStepReady ? (
+                            <>
+                                <Loader2 className="w-4 h-4 text-slate-500 animate-spin" />
+                                <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                                    {healthError || 'Service Offline'}
+                                </span>
                             </>
                         ) : (
                             <>
