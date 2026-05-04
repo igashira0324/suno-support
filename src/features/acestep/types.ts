@@ -1,4 +1,4 @@
-import { GenerationMode } from '../../types';
+export type AceStepTaskType = 'text2music' | 'cover' | 'repaint' | 'lego' | 'lora';
 
 export interface AceStepState {
     prompt: string;
@@ -21,7 +21,7 @@ export interface AceStepState {
     isAnalyzing: boolean;
     theme: string;
     seed: number;
-    task_type: GenerationMode;
+    task_type: AceStepTaskType;
     coverAudioSourceType: 'upload' | 'url';
     coverAudioUrl: string;
     coverAudioFile: File | null;

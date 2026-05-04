@@ -6,8 +6,8 @@ from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 from fastapi.responses import StreamingResponse
 from pydub import AudioSegment
 
-from ..core.config import settings
-from ..core.utils import resolve_web_path, download_audio_from_url
+from core.config import settings
+from core.utils import resolve_web_path, download_audio_from_url
 
 router = APIRouter(prefix="/files", tags=["files"])
 

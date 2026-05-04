@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
-from .config import settings
+from core.config import settings
 
 def setup_static_files(app: FastAPI):
     app.mount("/outputs/minimax", StaticFiles(directory=str(settings.minimax_output_dir)), name="minimax_outputs")

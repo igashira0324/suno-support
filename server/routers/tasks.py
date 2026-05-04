@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException
-from ..core.state import tasks
+from core.state import tasks
 
 router = APIRouter(prefix="/task", tags=["tasks"])
 

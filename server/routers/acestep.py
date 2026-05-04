@@ -19,9 +19,9 @@ import numpy as np
 import librosa
 import soundfile as sf
 
-from ..core.config import settings
-from ..core.state import tasks
-from ..core.utils import resolve_web_path, download_audio_from_url, parse_subtitle_to_lyrics, structure_whisper_output
+from core.config import settings
+from core.state import tasks
+from core.utils import resolve_web_path, download_audio_from_url, parse_subtitle_to_lyrics, structure_whisper_output
 import acestep_service
 
 logger = logging.getLogger("SunoArchitect.AceStep")
@@ -246,7 +246,16 @@ async def acestep_generate(request: AceStepRequest):
     )
     if "error" in result and result["error"]:
         raise HTTPException(status_code=500, detail=result["error"])
-    return result
+    
+    # Normalize response shape for frontend
+    # Expected: { "task_id": "..." }
+    task_id = result.get("task_id") or (result.get("data", {}) if isinstance(result.get("data"), dict) else {}).get("task_id")
+    
+    return {
+        "task_id": task_id,
+        "data": result.get("data") if isinstance(result.get("data"), dict) else result,
+        "raw": result
+    }
 
 @router.post("/minimax/generate")
 async def generate_minimax(request: MinimaxRequest):
@@ -348,6 +357,55 @@ async def acestep_llm_proxy(body: dict = Body(...)):
         return resp.json()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/status/{task_id}")
+async def get_acestep_status(task_id: str):
+    """
+    Get the status of an ACE-Step task with normalized output files.
+    """
+    result = acestep_service.query_result(task_id)
+    if not result:
+        # Check task store fallback
+        if task_id in tasks:
+            return tasks[task_id]
+        raise HTTPException(status_code=404, detail="Task not found")
+    
+    # Map status
+    raw_status = result.get("status")
+    status = "processing"
+    if raw_status == 1:
+        status = "completed"
+    elif raw_status == -1:
+        status = "failed"
+    
+    # Normalize output files for frontend
+    output_files = []
+    if raw_status == 1:
+        res_data = result.get("result")
+        # ACE-Step result can be a dict with 'data' containing 'output_files'
+        if isinstance(res_data, dict):
+            if "data" in res_data:
+                files = res_data["data"].get("output_files", [])
+                for f in files:
+                    # Convert to web URL
+                    output_files.append({
+                        "url": f"/outputs/acestep/{Path(f).name}",
+                        "label": "Generated Audio"
+                    })
+            elif "merged_url" in res_data:
+                 output_files.append({
+                    "url": res_data["merged_url"],
+                    "label": "Merged Output"
+                })
+
+    return {
+        "task_id": task_id,
+        "status": status,
+        "progress": 100 if raw_status == 1 else 0,
+        "output_files": output_files,
+        "result": result.get("result"),
+        "error": result.get("error")
+    }
 
 @router.post("/analyze")
 async def acestep_analyze(request: AnalyzeRequest):

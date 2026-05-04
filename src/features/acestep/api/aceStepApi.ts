@@ -66,14 +66,28 @@ export const aceStepApi = {
   /**
    * Start separation (for Voice Change)
    */
+  separate: async (filePath: string) => {
+    return apiClient.post<{ task_id: string }>('/acestep/separate', { file_path: filePath });
+  },
+
+  /**
+   * Get generic task status
+   */
+  getTaskStatus: async (taskId: string) => {
+    return apiClient.get<any>(`/task/${taskId}`);
+  },
+
+  /**
+   * Start separation from URL (generated file)
+   */
   separateGenerated: async (fileUrl: string) => {
-    return apiClient.post<{ task_id: string }>('/separate-generated', { file_url: fileUrl });
+    return apiClient.post<{ task_id: string }>('/acestep/separate-generated', { file_url: fileUrl });
   },
 
   /**
    * Save file to results
    */
   saveFile: async (fileUrl: string, title?: string, theme?: string) => {
-    return apiClient.post<any>('/save_file', { file_url: fileUrl, title, theme });
+    return apiClient.post<any>('/acestep/save_file', { file_url: fileUrl, title, theme });
   }
 };

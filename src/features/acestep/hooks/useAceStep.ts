@@ -1,8 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { AceStepState, VoiceChangeState } from '../types';
-import { acestepApi } from '../api';
+import { AceStepState, VoiceChangeState, AceStepTaskType } from '../types';
+import { aceStepApi as acestepApi } from '../api/aceStepApi';
 import { generateSunoPrompt, generateTitle, structureLyrics, generateStyleFromLyrics } from '../../../services/geminiService';
-import { GenerationMode } from '../types';
 
 export const useAceStep = () => {
     const [state, setState] = useState<AceStepState>({
@@ -73,15 +72,23 @@ export const useAceStep = () => {
     const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
     const vcPollRef = useRef<NodeJS.Timeout | null>(null);
 
+    // Cleanup on unmount
+    useEffect(() => {
+        return () => {
+            if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+            if (vcPollRef.current) clearInterval(vcPollRef.current);
+        };
+    }, []);
+
     // Smooth progress simulation
     useEffect(() => {
         if (['running', 'queued', 'starting', 'processing'].includes(state.status)) {
             const interval = setInterval(() => {
-                setVisualProgress(prev => {
-                    const target = state.progress * 100;
-                    if (target > prev && target <= 100) return target;
-                    if (prev < 98) return prev + 0.083;
-                    return prev;
+                setVisualProgress(prevProgress => {
+                    const target = state.progress;
+                    if (target > prevProgress && target <= 100) return target;
+                    if (prevProgress < 98) return prevProgress + 0.083;
+                    return prevProgress;
                 });
             }, 500);
             return () => clearInterval(interval);
@@ -111,14 +118,17 @@ export const useAceStep = () => {
 
                 if (currentStatus === 'completed' || currentStatus === 'failed') {
                     if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-                    const endTime = Date.now();
-                    const pTime = prev.startTime ? (endTime - prev.startTime) / 1000 : undefined;
                     
-                    setState(prev => ({
-                        ...prev,
-                        isGenerating: false,
-                        processingTime: pTime
-                    }));
+                    setState(prev => {
+                        const endTime = Date.now();
+                        const pTime = prev.startTime ? (endTime - prev.startTime) / 1000 : undefined;
+                        
+                        return {
+                            ...prev,
+                            isGenerating: false,
+                            processingTime: pTime
+                        };
+                    });
 
                     // Auto Post-Process for Repaint
                     if (currentStatus === 'completed' && state.task_type === 'repaint' && state.autoTrim && data.output_files?.length > 0) {
@@ -173,15 +183,15 @@ export const useAceStep = () => {
                 }
             }
 
-            const res = await acestepApi.generate({
+            const data = await acestepApi.generate({
                 ...state,
                 src_audio_path: srcAudioPath,
                 reference_audio_path: (state.useAdg && srcAudioPath) ? srcAudioPath : null
             });
-            const data = await res.json();
-            if (data.data && data.data.task_id) {
-                setState(prev => ({ ...prev, taskId: data.data.task_id }));
-                startPolling(data.data.task_id);
+            
+            if (data.task_id) {
+                setState(prev => ({ ...prev, taskId: data.task_id }));
+                startPolling(data.task_id);
             }
         } catch (err: any) {
             setState(prev => ({ ...prev, isGenerating: false, status: 'failed', error: err.message }));
