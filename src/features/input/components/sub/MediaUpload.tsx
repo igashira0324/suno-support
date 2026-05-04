@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { Image as ImageIcon, Video, X } from 'lucide-react';
 import { MediaType } from '../../../../types';
 
@@ -10,6 +10,19 @@ interface MediaUploadProps {
 
 export const MediaUpload: React.FC<MediaUploadProps> = ({ mediaType, mediaFile, onFileSelect }) => {
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (mediaFile && mediaType === MediaType.IMAGE) {
+            const url = URL.createObjectURL(mediaFile);
+            setPreviewUrl(url);
+            return () => {
+                URL.revokeObjectURL(url);
+                setPreviewUrl(null);
+            };
+        }
+        setPreviewUrl(null);
+    }, [mediaFile, mediaType]);
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
@@ -27,8 +40,6 @@ export const MediaUpload: React.FC<MediaUploadProps> = ({ mediaType, mediaFile, 
     const triggerFileUpload = () => {
         fileInputRef.current?.click();
     };
-
-    const previewUrl = mediaFile && mediaType === MediaType.IMAGE ? URL.createObjectURL(mediaFile) : null;
 
     return (
         <div>

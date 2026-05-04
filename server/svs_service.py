@@ -55,6 +55,9 @@ class SVSService:
             task_output_dir.mkdir(parents=True, exist_ok=True)
             
             # Step 1: Instrument Separation using Demucs 6-stem model
+            if self.tasks.get(task_id, {}).get("status") == "cancelled":
+                return {}
+
             if not HAS_SEPARATOR:
                 raise ImportError("audio-separator not installed.")
 
@@ -99,6 +102,9 @@ class SVSService:
             self.tasks[task_id]["progress"] = 50
             self.tasks[task_id]["status"] = "midi_conversion"
             
+            if self.tasks.get(task_id, {}).get("status") == "cancelled":
+                return {}
+
             # Step 2: Audio-to-MIDI via basic-pitch
             midi_url = None
             midi_filepath = None
@@ -118,6 +124,9 @@ class SVSService:
             self.tasks[task_id]["progress"] = 70
             self.tasks[task_id]["status"] = "vocal_synthesis"
             
+            if self.tasks.get(task_id, {}).get("status") == "cancelled":
+                return {}
+
             # Step 3: Vocal Synthesis (Phase 3 Implementation)
             vocal_url = None
             mix_url = None
@@ -316,3 +325,13 @@ class SVSService:
         Returns the status and progress of a background task.
         """
         return self.tasks.get(task_id)
+
+    def cancel_task(self, task_id: str) -> bool:
+        """
+        Marks a task as cancelled.
+        """
+        if task_id in self.tasks:
+            self.tasks[task_id]["status"] = "cancelled"
+            logger.info(f"[{task_id}] Task marked as cancelled.")
+            return True
+        return False

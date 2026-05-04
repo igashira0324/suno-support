@@ -49,3 +49,10 @@ async def get_svs_status(task_id: str):
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     return task
+
+@router.post("/cancel/{task_id}")
+async def cancel_svs_task(task_id: str):
+    success = svs_service.cancel_task(task_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return {"status": "success", "message": f"Task {task_id} cancelled"}

@@ -20,6 +20,7 @@ const initialVocalStudioState: VocalStudioState = {
 export const useVocalStudio = () => {
     const [state, setState] = useState<VocalStudioState>(initialVocalStudioState);
     const timeoutRef = useRef<any>(null);
+    const taskIdRef = useRef<string | null>(null);
 
     useEffect(() => {
         return () => {
@@ -43,6 +44,26 @@ export const useVocalStudio = () => {
         }
     };
 
+    const handleCancel = async () => {
+        if (taskIdRef.current) {
+            try {
+                await fetch(toApiUrl(`/svs/cancel/${taskIdRef.current}`), {
+                    method: 'POST'
+                });
+            } catch (e) {
+                console.error("Cancel failed:", e);
+            }
+        }
+        clearPolling();
+        taskIdRef.current = null;
+        setState(prev => ({ 
+            ...prev, 
+            isProcessing: false, 
+            status: 'キャンセルされました',
+            progress: 0
+        }));
+    };
+
     const handleGenerate = async () => {
         if (!state.instrumentalFile) {
             setState(prev => ({ ...prev, error: "Please upload an instrumental file." }));
@@ -54,6 +75,7 @@ export const useVocalStudio = () => {
         }
 
         clearPolling();
+        taskIdRef.current = null;
         setState(prev => ({ 
             ...prev, 
             isProcessing: true, 
@@ -89,6 +111,7 @@ export const useVocalStudio = () => {
             }
 
             const { task_id } = await startRes.json();
+            taskIdRef.current = task_id;
             
             // Step 3: Polling status
             const pollStatus = async () => {
@@ -108,6 +131,16 @@ export const useVocalStudio = () => {
                             vocalUrl: task.result.vocal_url ? toApiUrl(task.result.vocal_url) : null,  
                             mixUrl: task.result.mix_url ? toApiUrl(task.result.mix_url) : null       
                         }));
+                        taskIdRef.current = null;
+                        timeoutRef.current = null;
+                    } else if (task.status === 'cancelled') {
+                        setState(prev => ({ 
+                            ...prev, 
+                            isProcessing: false, 
+                            status: 'キャンセルされました',
+                            progress: 0
+                        }));
+                        taskIdRef.current = null;
                         timeoutRef.current = null;
                     } else if (task.status === 'error') {
                         throw new Error(task.error || "生成タスク中にエラーが発生しました");
@@ -151,6 +184,7 @@ export const useVocalStudio = () => {
         state,
         setState,
         handleFileSelect,
-        handleGenerate
+        handleGenerate,
+        handleCancel
     };
 };

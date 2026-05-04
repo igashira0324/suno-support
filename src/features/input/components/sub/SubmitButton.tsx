@@ -22,9 +22,7 @@ export const SubmitButton: React.FC<SubmitButtonProps> = ({ onClick, isLoading, 
             }, 500);
             return () => clearInterval(interval);
         } else {
-            setProgress(100);
-            const timer = setTimeout(() => setProgress(0), 500);
-            return () => clearTimeout(timer);
+            setProgress(0);
         }
     }, [isLoading]);
 

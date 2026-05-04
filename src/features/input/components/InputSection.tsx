@@ -33,10 +33,6 @@ const OEMBED_PATTERNS = [
     /youtube\.com/, /youtu\.be/,
     /open\.spotify\.com/,
     /soundcloud\.com/,
-    /tiktok\.com/,
-    /vimeo\.com/,
-    /twitter\.com/, /x\.com/,
-    /instagram\.com/,
     /suno\.com/, /suno\.ai/
 ];
 
@@ -72,7 +68,7 @@ const InputSection: React.FC<InputSectionProps> = ({
                 onSearchEngineChange('none');
             }
         }
-    }, [youtubeUrl]);
+    }, [youtubeUrl, searchEnabled, onSearchEngineChange]);
 
     const handleSearchToggle = (enabled: boolean) => {
         setSearchEnabled(enabled);

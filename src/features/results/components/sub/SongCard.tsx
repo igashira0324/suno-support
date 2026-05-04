@@ -1,7 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Sparkles, Mic2, MicOff, Zap, Film, Download, AlertCircle, Loader2, Music2, Check } from 'lucide-react';
-import { SongSelection, MVTimeline } from '../../../../types';
-import { CopyButton } from './CopyButton';
+import { SongSelection } from '../../../../types';
+import { SongHeader } from './song-card/SongHeader';
+import { EditableTitleBlock } from './song-card/EditableTitleBlock';
+import { StylePromptBlock } from './song-card/StylePromptBlock';
+import { LyricsBlock } from './song-card/LyricsBlock';
+import { TimelineBlock } from './song-card/TimelineBlock';
+import { DownloadButtons } from './song-card/DownloadButtons';
+import { MinimaxGeneratePanel } from './song-card/MinimaxGeneratePanel';
+import { formatContent, getTimelineDisplayString } from './song-card/utils';
 
 interface SongCardProps {
     selection: SongSelection;
@@ -9,15 +15,6 @@ interface SongCardProps {
     isAlternative?: boolean;
     onMinimaxGenerate?: (title: string, style: string, content: string) => void;
 }
-
-const formatContent = (content: string): string => {
-    if (!content) return '';
-    let formatted = content.replace(/\\n/g, '\n').trim();
-    const structureTags = /\[(Intro|Verse\s*\d*|Chorus|Bridge|Outro|Pre-Chorus|Post-Chorus|Drop|Hook|Interlude|Breakdown|Instrumental|Solo|Refrain|Fade|End|Tag|Coda|Stanza|Skit|Spoken|Rap|Singing|Harmonies|Ad-lib|Whisper|Screaming|Break|Build)\]/gi;
-    formatted = formatted.replace(structureTags, (match) => '\n\n' + match);
-    formatted = formatted.replace(/\n{3,}/g, '\n\n').replace(/^\n+/, '');
-    return formatted;
-};
 
 export const SongCard: React.FC<SongCardProps> = ({ selection, label, isAlternative = false, onMinimaxGenerate }) => {
     const [title, setTitle] = useState(selection.title);
@@ -28,7 +25,6 @@ export const SongCard: React.FC<SongCardProps> = ({ selection, label, isAlternat
 
     const borderColor = isAlternative ? 'border-pink-500/30' : 'border-indigo-500/30';
     const glowColor = isAlternative ? 'shadow-pink-900/20' : 'shadow-indigo-900/20';
-    const badgeBg = isAlternative ? 'bg-pink-500/20 text-pink-300 border-pink-500/30' : 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30';
 
     const lyricsLimit = 3500;
     const promptLimit = 2000;
@@ -60,45 +56,6 @@ export const SongCard: React.FC<SongCardProps> = ({ selection, label, isAlternat
         }
     };
 
-    const timelineToDisplayString = (tl: MVTimeline): string => {
-        const lines: string[] = [];
-        for (const s of tl.scenes) {
-            lines.push(`--- Scene ${s.scene_number}: ${s.scene_name} ---`);
-            lines.push(`Timestamp: ${s.timestamp}`);
-            lines.push(`Section: ${s.section}`);
-            lines.push(`Lyrics Excerpt: ${s.lyrics_excerpt}`);
-            lines.push(`Prompt (EN): ${s.prompt_en}`);
-            lines.push(`Camera: ${s.camera}`);
-            lines.push(`Effect: ${s.effect}`);
-            lines.push(`Color Palette: ${s.color_palette}`);
-            lines.push(`Genspark Prompt: ${s.genspark_prompt}`);
-            lines.push(`Continuity Notes:`);
-            lines.push(`  - Character: ${s.continuity_notes?.character || ''}`);
-            lines.push(`  - Color Shift: ${s.continuity_notes?.color_shift || ''}`);
-            lines.push(`  - Key Object Carry: ${s.continuity_notes?.key_object_carry || ''}`);
-            lines.push(`Mood: ${s.mood}`);
-            lines.push(``);
-        }
-        if (tl.evaluation_criteria) {
-            const ec = tl.evaluation_criteria;
-            lines.push(`--- Evaluation Criteria ---`);
-            lines.push(`Must Include: ${ec.must_include}`);
-            lines.push(`Style Consistency: ${ec.style_consistency}`);
-            lines.push(`Color Evolution: ${Array.isArray(ec.color_evolution) ? ec.color_evolution.join(' -> ') : ec.color_evolution}`);
-            lines.push(`Aspect Ratio: ${ec.aspect_ratio}`);
-            lines.push(`Negative Prompt: ${ec.negative_prompt}`);
-            lines.push(`Quality Threshold: ${ec.quality_threshold}`);
-            lines.push(`Max Retries: ${ec.max_retries}`);
-        }
-        return lines.join('\n');
-    };
-
-    const getTimelineDisplayString = (): string => {
-        if (!selection.timeline) return '';
-        if (typeof selection.timeline === 'string') return selection.timeline;
-        return timelineToDisplayString(selection.timeline);
-    };
-
     const handleDownloadTxt = () => {
         const sections = [
             `========================================`,
@@ -112,7 +69,7 @@ export const SongCard: React.FC<SongCardProps> = ({ selection, label, isAlternat
             formatContent(content),
         ];
         if (selection.timeline) {
-            sections.push(``, `--- MV Scene Prompts (Timeline) ---`, getTimelineDisplayString());
+            sections.push(``, `--- MV Scene Prompts (Timeline) ---`, getTimelineDisplayString(selection.timeline));
         }
         sections.push(``, `========================================`, `Generated by SunoArchitect`);
         const blob = new Blob([sections.join('\n')], { type: 'text/plain;charset=utf-8' });
@@ -157,173 +114,53 @@ export const SongCard: React.FC<SongCardProps> = ({ selection, label, isAlternat
     return (
         <div className={`bg-gradient-to-br from-slate-900 to-slate-950 border ${borderColor} rounded-2xl p-1 overflow-hidden shadow-2xl ${glowColor}`}>
             <div className="bg-slate-950/90 rounded-xl p-6 sm:p-8 backdrop-blur-xl relative">
-                <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2">
-                        <div className={`px-2 py-0.5 rounded text-xs font-bold tracking-wide border ${badgeBg} flex items-center gap-1`}>
-                            {isAlternative ? <Zap className="w-3 h-3" /> : <Sparkles className="w-3 h-3" />}
-                            {label}
-                        </div>
-                        <div className={`flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold tracking-wide border ${selection.instrumental ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30' : 'bg-orange-500/20 text-orange-300 border-orange-500/30'}`}>
-                            {selection.instrumental ? <MicOff className="w-3 h-3" /> : <Mic2 className="w-3 h-3" />}
-                            {selection.instrumental ? 'INSTRUMENTAL' : 'VOCAL'}
-                        </div>
-                    </div>
-                    <button
-                        onClick={() => setIsEditing(!isEditing)}
-                        className={`text-xs px-3 py-1.5 rounded-lg border transition-all font-bold ${isEditing ? 'bg-emerald-600 border-emerald-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'}`}
-                    >
-                        {isEditing ? '編集完了' : '編集する'}
-                    </button>
-                </div>
+                <SongHeader
+                    label={label}
+                    isAlternative={isAlternative}
+                    instrumental={selection.instrumental || false}
+                    isEditing={isEditing}
+                    onToggleEdit={() => setIsEditing(!isEditing)}
+                />
 
-                <div className="mb-8 pb-6 border-b border-slate-800">
-                    <div className="flex items-center justify-between mb-2">
-                        <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Title</label>
-                        <CopyButton text={title} label="タイトルをコピー" />
-                    </div>
-                    {isEditing ? (
-                        <input
-                            value={title}
-                            onChange={(e) => setTitle(e.target.value)}
-                            className="w-full p-4 bg-slate-900 rounded-lg border border-slate-700 text-xl font-bold text-white outline-none focus:ring-1 focus:ring-indigo-500"
-                        />
-                    ) : (
-                        <div className="p-4 bg-slate-900 rounded-lg border border-slate-800">
-                            <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">{title}</h2>
-                            {selection.comment && <p className="text-sm text-slate-400 italic mt-2">💡 {selection.comment}</p>}
-                        </div>
-                    )}
-                </div>
+                <EditableTitleBlock
+                    title={title}
+                    onTitleChange={setTitle}
+                    comment={selection.comment}
+                    isEditing={isEditing}
+                />
 
-                <div className="mb-8">
-                    <div className="flex items-center justify-between mb-2">
-                        <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Style Prompts</label>
-                        <div className="flex items-center gap-2">
-                            <span className={`text-[10px] ${style.length > promptLimit ? 'text-red-400 font-bold' : 'text-slate-500'}`}>{style.length}/{promptLimit}</span>
-                            <CopyButton text={style} label="Styleコピー" />
-                        </div>
-                    </div>
-                    {isEditing ? (
-                        <textarea
-                            value={style}
-                            onChange={(e) => setStyle(e.target.value)}
-                            className="w-full h-24 p-4 bg-slate-900 rounded-lg border border-slate-700 font-mono text-sm text-indigo-300 outline-none focus:ring-1 focus:ring-indigo-500 resize-none"
-                        />
-                    ) : (
-                        <div className="p-4 bg-slate-900 rounded-lg border border-slate-800 font-mono text-sm text-indigo-300 break-words">{style}</div>
-                    )}
-                </div>
+                <StylePromptBlock
+                    style={style}
+                    onStyleChange={setStyle}
+                    isEditing={isEditing}
+                    limit={promptLimit}
+                />
 
-                <div className="mb-8">
-                    <div className="flex items-center justify-between mb-2">
-                        <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{selection.instrumental ? 'Structure Metatags' : 'Lyrics & Metatags'}</label>
-                        <div className="flex items-center gap-2">
-                            <span className={`text-[10px] ${content.length > lyricsLimit ? 'text-red-400 font-bold' : 'text-slate-500'}`}>{content.length}/{lyricsLimit}</span>
-                            <CopyButton text={formatContent(content)} label="歌詞・構成をコピー" />
-                        </div>
-                    </div>
-                    <div className="relative">
-                        <div className={`absolute top-0 left-0 w-full h-1 bg-gradient-to-r opacity-50 ${isAlternative ? 'from-pink-500 via-rose-500 to-purple-500' : 'from-indigo-500 via-purple-500 to-pink-500'}`} />
-                        {isEditing ? (
-                            <textarea
-                                value={content}
-                                onChange={(e) => setContent(e.target.value)}
-                                className="w-full h-[400px] p-6 bg-slate-900 rounded-b-lg rounded-tr-lg border-x border-b border-slate-700 font-mono text-sm text-slate-300 outline-none focus:ring-1 focus:ring-indigo-500 resize-none leading-relaxed"
-                            />
-                        ) : (
-                            <pre className="p-6 bg-slate-900 rounded-b-lg rounded-tr-lg border-x border-b border-slate-800 font-mono text-sm text-slate-300 whitespace-pre-wrap leading-relaxed max-h-[500px] overflow-y-auto custom-scrollbar">
-                                {formatContent(content)}
-                            </pre>
-                        )}
-                    </div>
-                </div>
+                <LyricsBlock
+                    content={content}
+                    onContentChange={setContent}
+                    isEditing={isEditing}
+                    instrumental={selection.instrumental || false}
+                    isAlternative={isAlternative}
+                    limit={lyricsLimit}
+                />
 
-                {selection.timeline && (
-                    <div className="mb-8">
-                        <div className="flex items-center justify-between mb-2">
-                            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
-                                <Film className="w-3.5 h-3.5 text-amber-400" />
-                                MV Scene Prompts (Timeline)
-                            </label>
-                            <CopyButton text={getTimelineDisplayString()} label="タイムラインをコピー" />
-                        </div>
-                        <div className="relative">
-                            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-500 via-orange-500 to-red-500 opacity-50" />
-                            <pre className="p-6 bg-slate-900 rounded-b-lg rounded-tr-lg border-x border-b border-slate-800 font-mono text-sm text-amber-200/80 whitespace-pre-wrap leading-relaxed max-h-[500px] overflow-y-auto custom-scrollbar">
-                                {getTimelineDisplayString()}
-                            </pre>
-                        </div>
-                    </div>
-                )}
+                <TimelineBlock timeline={selection.timeline} />
 
-                <div className="mb-6 flex justify-end gap-3">
-                    <button
-                        onClick={handleDownloadTxt}
-                        className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-teal-600 to-cyan-600 hover:from-teal-500 hover:to-cyan-500 text-white text-xs font-bold transition-all shadow-lg hover:shadow-teal-500/25"
-                    >
-                        <Download className="w-4 h-4" />
-                        Download TXT
-                    </button>
-                    {selection.timeline && (
-                        <button
-                            onClick={handleDownloadJson}
-                            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white text-xs font-bold transition-all shadow-lg hover:shadow-violet-500/25"
-                        >
-                            <Download className="w-4 h-4" />
-                            Download JSON
-                        </button>
-                    )}
-                </div>
+                <DownloadButtons
+                    onDownloadTxt={handleDownloadTxt}
+                    onDownloadJson={handleDownloadJson}
+                    hasTimeline={!!selection.timeline}
+                />
 
-                <div className="pt-6 border-t border-slate-800">
-                    {!selection.minimaxAudioUrl ? (
-                        <div className="space-y-4">
-                            {selection.minimaxError && (
-                                <div className="p-4 bg-red-950/40 border border-red-500/40 rounded-xl text-red-200 text-sm flex items-start gap-3">
-                                    <AlertCircle className="w-5 h-5 text-red-400 shrink-0" />
-                                    <div>
-                                        <p className="font-bold text-red-300">生成に失敗しました</p>
-                                        <p className="opacity-80">{selection.minimaxError}</p>
-                                    </div>
-                                </div>
-                            )}
-                            <button
-                                onClick={handleGenerate}
-                                disabled={selection.isMinimaxGenerating}
-                                className={`w-full py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg ${selection.isMinimaxGenerating ? 'bg-slate-800 text-slate-500 cursor-not-allowed' : 'bg-gradient-to-r from-orange-600 to-pink-600 hover:from-orange-500 hover:to-pink-500 text-white hover:shadow-orange-500/25'}`}
-                            >
-                                {selection.isMinimaxGenerating ? (
-                                    <>
-                                        <Loader2 className="w-5 h-5 animate-spin" />
-                                        <span>MiniMax Music 2.5 で生成中... ({elapsedTime}秒経過)</span>
-                                    </>
-                                ) : (
-                                    <>
-                                        <Music2 className="w-5 h-5" />
-                                        <span>{selection.minimaxError ? 'MiniMax で再試行' : 'MiniMax Music 2.5 で楽曲を生成'}</span>
-                                    </>
-                                )}
-                            </button>
-                            <p className="text-[10px] text-slate-500 text-center uppercase tracking-widest font-bold">
-                                ※ 生成には通常 1〜3 分かかります。
-                            </p>
-                        </div>
-                    ) : (
-                        <div className="space-y-4">
-                            <div className="flex items-center justify-between">
-                                <span className="text-xs font-bold text-emerald-400 flex items-center gap-1.5"><Check className="w-4 h-4" />MiniMax Music 2.5 生成完了</span>
-                                <a
-                                    href={selection.minimaxAudioUrl}
-                                    download={`${title}.mp3`}
-                                    className="text-xs text-indigo-400 hover:text-indigo-300 font-bold transition-all"
-                                >
-                                    ファイルをダウンロード
-                                </a>
-                            </div>
-                            <audio controls src={selection.minimaxAudioUrl} className="w-full h-10 filter invert hue-rotate-180 opacity-80" />
-                        </div>
-                    )}
-                </div>
+                <MinimaxGeneratePanel
+                    minimaxAudioUrl={selection.minimaxAudioUrl}
+                    isMinimaxGenerating={selection.isMinimaxGenerating || false}
+                    minimaxError={selection.minimaxError}
+                    elapsedTime={elapsedTime}
+                    title={title}
+                    onGenerate={handleGenerate}
+                />
             </div>
         </div>
     );

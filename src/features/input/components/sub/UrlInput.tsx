@@ -11,10 +11,6 @@ const OEMBED_PATTERNS = [
     /youtube\.com/, /youtu\.be/,
     /open\.spotify\.com/,
     /soundcloud\.com/,
-    /tiktok\.com/,
-    /vimeo\.com/,
-    /twitter\.com/, /x\.com/,
-    /instagram\.com/,
     /suno\.com/, /suno\.ai/
 ];
 
