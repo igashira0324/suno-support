@@ -152,7 +152,7 @@ def run_separation_task(task_id: str, input_path: Path):
             fname_lower = fname.lower()
             if "vocals" in fname_lower:
                 found_vocals = fpath
-            elif "instrumental" in fname_lower:
+            elif any(x in fname_lower for x in ["instrumental", "karaoke", "backing", "no_vocals"]):
                 found_inst = fpath
             else:
                 other_stems.append(fpath)
