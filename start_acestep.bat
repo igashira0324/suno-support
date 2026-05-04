@@ -15,9 +15,9 @@ echo.
 echo Launching Backend and Frontend...
 echo.
 
-if exist "ace-step\ACE-Step_UI_Guide.html" (
+if exist "docs\ACE-Step_UI_Guide.html" (
     echo Opening UI Guide...
-    start "" "ace-step\ACE-Step_UI_Guide.html"
+    start "" "docs\ACE-Step_UI_Guide.html"
 )
 
 call run.bat
