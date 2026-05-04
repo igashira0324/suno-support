@@ -1,6 +1,7 @@
 @echo off
 title Suno Architect - Full Stack Starter
 setlocal
+cd /d "%~dp0"
 
 echo [1/2] Starting Backend (FastAPI)...
 start cmd /k "cd server && python -m uvicorn main:app --reload --port 8100"
