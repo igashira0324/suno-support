@@ -17,7 +17,7 @@ async def upload_file(file: UploadFile = File(...)):
         # P2: Handle None content_type
         content_type = file.content_type or ""
         # P1: Preserve original extension or guess from content type
-        orig_ext = Path(file.filename).suffix
+        orig_ext = Path(file.filename or "").suffix
         if not orig_ext:
             if "audio/mpeg" in content_type:
                 ext = ".mp3"

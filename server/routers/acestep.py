@@ -394,7 +394,7 @@ async def acestep_upload_source(file: UploadFile = File(...)):
         # P2: Handle None content_type
         content_type = file.content_type or ""
         # P1: Preserve original extension or guess from content type
-        orig_ext = Path(file.filename).suffix
+        orig_ext = Path(file.filename or "").suffix
         if not orig_ext:
             if "audio/mpeg" in content_type:
                 ext = ".mp3"
@@ -411,8 +411,10 @@ async def acestep_upload_source(file: UploadFile = File(...)):
         with open(filepath, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
         return {"status": "success", "path": str(filepath.resolve())}
-    except Exception:
+    except HTTPException:
         raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/download-url")
 async def acestep_download_url(request: Request):
@@ -715,7 +717,7 @@ async def get_acestep_status(task_id: str):
 async def acestep_separate(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
     try:
         # Save uploaded file
-        ext = Path(file.filename).suffix or ".mp3"
+        ext = Path(file.filename or "").suffix or ".mp3"
         file_id = str(uuid.uuid4())
         filepath = ACESTEP_SOURCE_DIR / f"sep_input_{file_id}{ext}"
         with open(filepath, "wb") as buffer:
@@ -779,7 +781,8 @@ async def acestep_voice_convert(
         if orig_path and not orig_path.exists():
             orig_path = None
         
-        ref_path = ACESTEP_SOURCE_DIR / f"ref_{uuid.uuid4().hex[:8]}{Path(reference_audio.filename).suffix}"
+        ref_suffix = Path(reference_audio.filename or "").suffix or ".wav"
+        ref_path = ACESTEP_SOURCE_DIR / f"ref_{uuid.uuid4().hex[:8]}{ref_suffix}"
         with open(ref_path, "wb") as buffer:
             shutil.copyfileobj(reference_audio.file, buffer)
             
@@ -812,6 +815,8 @@ async def acestep_extract_lyrics(request: ExtractLyricsRequest):
         import whisper_service
         result = whisper_service.get_whisper_service().transcribe(str(audio_path), language=request.language)
         return {"lyrics": result.get("text", ""), "segments": result.get("segments", [])}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
