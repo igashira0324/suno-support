@@ -6,6 +6,18 @@
 
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8100';
 
+export class ApiError extends Error {
+  status: number;
+  detail?: any;
+
+  constructor(message: string, status: number, detail?: any) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.detail = detail;
+  }
+}
+
 class ApiClient {
   private baseUrl: string;
 
@@ -28,7 +40,11 @@ class ApiClient {
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.detail || `API request failed with status ${response.status}`);
+      throw new ApiError(
+        errorData.detail || `API request failed with status ${response.status}`,
+        response.status,
+        errorData
+      );
     }
 
     return response.json();
@@ -59,7 +75,11 @@ class ApiClient {
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.detail || `Upload failed with status ${response.status}`);
+      throw new ApiError(
+        errorData.detail || `Upload failed with status ${response.status}`,
+        response.status,
+        errorData
+      );
     }
 
     return response.json();

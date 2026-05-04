@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { AceStepState, VoiceChangeState, AceStepTaskType } from '../types';
 import { GenerationMode } from '../../../types';
 import { aceStepApi as acestepApi } from '../api/aceStepApi';
-import { toApiUrl } from '../../../api/client';
+import { toApiUrl, ApiError } from '../../../api/client';
 import { generateSunoPrompt, generateTitle, structureLyrics, generateStyleFromLyrics } from '../../../services/geminiService';
 
 export const useAceStep = () => {
@@ -95,7 +95,7 @@ export const useAceStep = () => {
                 await acestepApi.health();
                 setState(prev => ({ ...prev, isAceStepReady: true, healthError: null }));
             } catch (err: any) {
-                const isLoading = err.status === 503 || err.message?.includes('starting up');
+                const isLoading = (err instanceof ApiError && err.status === 503) || err.message?.includes('starting up');
                 setState(prev => ({ 
                     ...prev, 
                     isAceStepReady: false, 

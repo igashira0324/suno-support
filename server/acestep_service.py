@@ -64,7 +64,14 @@ def release_task(prompt, lyrics, **kwargs):
         payload["instrumental"] = False
         payload["thinking"] = True
 
-    logger.info(f"Releasing task to ACE-Step: {json.dumps(payload, indent=2)}")
+    # Log a truncated version for cleanliness
+    log_payload = payload.copy()
+    if len(log_payload.get("lyrics", "")) > 100:
+        log_payload["lyrics"] = log_payload["lyrics"][:100] + "..."
+    if len(log_payload.get("prompt", "")) > 100:
+        log_payload["prompt"] = log_payload["prompt"][:100] + "..."
+    
+    logger.info(f"Releasing task to ACE-Step: {json.dumps(log_payload, indent=2)}")
 
     # Handle Repaint mode parameters
     if kwargs.get("task_type") == "repaint":

@@ -29,6 +29,8 @@ export const aceStepApi = {
       use_adg: state.useAdg,
       reference_audio_path: state.reference_audio_path,
       track_name: state.legoTrackName,
+      shift: state.shift,
+      infer_method: state.infer_method,
     };
     
     return apiClient.post<{ task_id: string }>('/acestep/generate', params);

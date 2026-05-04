@@ -160,10 +160,10 @@ export const SettingsSection: React.FC<SettingsSectionProps> = ({
                                 onChange={(e) => setState(prev => ({ ...prev, language: e.target.value }))}
                                 className="w-full bg-slate-950/80 border border-slate-800 rounded-lg px-3 py-2 text-[10px] font-bold text-slate-300 focus:outline-none focus:ring-1 focus:ring-indigo-500/50"
                             >
-                                <option value="japanese">Japanese</option>
-                                <option value="english">English</option>
-                                <option value="chinese">Chinese</option>
-                                <option value="korean">Korean</option>
+                                <option value="ja">Japanese</option>
+                                <option value="en">English</option>
+                                <option value="zh">Chinese</option>
+                                <option value="ko">Korean</option>
                             </select>
                         </div>
                     </div>

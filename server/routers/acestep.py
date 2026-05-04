@@ -1,18 +1,14 @@
 import os
 import shutil
 import uuid
-import threading
 import logging
 import re
 import requests
 import json
 import ast
-import subprocess
-import sys
 import time
-import io
 from pathlib import Path
-from urllib.parse import quote, unquote
+from urllib.parse import quote, unquote, urlparse
 from typing import Optional, List, Dict
 from fastapi import APIRouter, UploadFile, File, HTTPException, Body, Request, Form, BackgroundTasks
 from pydantic import BaseModel
@@ -82,6 +78,8 @@ class AceStepRequest(BaseModel):
     use_adg: bool = False
     reference_audio_path: Optional[str] = None
     track_name: Optional[str] = None
+    shift: float = 0.0
+    infer_method: str = "euler"
 
 class PostProcessRequest(BaseModel):
     file_url: str
@@ -151,12 +149,12 @@ def run_separation_task(task_id: str, input_path: Path):
         
         for fname in output_files:
             fpath = output_dir / fname
-            if "Vocals" in fname:
+            fname_lower = fname.lower()
+            if "vocals" in fname_lower:
                 found_vocals = fpath
-            elif "Instrumental" in fname:
+            elif "instrumental" in fname_lower:
                 found_inst = fpath
             else:
-                # Keep track of other stems (Drums, Bass, Other) for potential mixing
                 other_stems.append(fpath)
         
         # 1. Process Vocals
@@ -210,19 +208,22 @@ def run_separation_task(task_id: str, input_path: Path):
                     logger.error(f"Failed to mix stem {stem_path.name}: {mix_err}")
             
             if mixed_audio is not None:
+                # Clipping prevention: normalize to -1.0 to 1.0 range
+                max_val = np.max(np.abs(mixed_audio))
+                if max_val > 1.0:
+                    mixed_audio = mixed_audio / (max_val + 1e-6)
+                    logger.info(f"Normalized mixed audio to prevent clipping (max was {max_val})")
+                
                 # soundfile expects (samples, channels)
                 sf.write(str(inst_path), mixed_audio.T, target_sr)
                 logger.info(f"Created combined instrumental at {inst_path}")
         
-        # Final validation
-        if not vocals_path.exists() and not inst_path.exists():
-            raise Exception("Separation failed: Neither vocals nor instrumental files were created.")
-        
-        if not vocals_path.exists():
-            logger.warning(f"Vocals file missing at {vocals_path}")
-        
-        if not inst_path.exists():
-            logger.error(f"Instrumental file missing at {inst_path}")
+        # Final validation: Both stems are mandatory for Music Architect pipeline
+        if not vocals_path.exists() or not inst_path.exists():
+            missing = []
+            if not vocals_path.exists(): missing.append("vocals")
+            if not inst_path.exists(): missing.append("instrumental")
+            raise Exception(f"Separation failed: Missing required stems: {', '.join(missing)}")
         
         tasks[task_id]["result"] = {
 
@@ -381,6 +382,34 @@ def normalize_acestep_audio_url(raw_url: str) -> str:
 
 @router.post("/generate")
 async def acestep_generate(request: AceStepRequest):
+    # Handle source audio localization
+    if request.src_audio_path:
+        if request.src_audio_path.startswith("http"):
+            parsed = urlparse(request.src_audio_path)
+            # Resolve relative to backend if local
+            if parsed.netloc == "localhost:8100" or not parsed.netloc:
+                local_path = resolve_web_path(parsed.path)
+                if local_path and os.path.exists(local_path):
+                    request.src_audio_path = str(local_path)
+        elif not os.path.isabs(request.src_audio_path):
+            # Try to resolve as local relative path
+            local_path = settings.upload_dir / request.src_audio_path
+            if os.path.exists(local_path):
+                request.src_audio_path = str(local_path)
+
+    # Handle reference audio localization
+    if request.reference_audio_path:
+        if request.reference_audio_path.startswith("http"):
+            parsed = urlparse(request.reference_audio_path)
+            if parsed.netloc == "localhost:8100" or not parsed.netloc:
+                local_path = resolve_web_path(parsed.path)
+                if local_path and os.path.exists(local_path):
+                    request.reference_audio_path = str(local_path)
+        elif not os.path.isabs(request.reference_audio_path):
+            local_path = settings.upload_dir / request.reference_audio_path
+            if os.path.exists(local_path):
+                request.reference_audio_path = str(local_path)
+
     logger.info(f"Starting ACE-Step generation: model={request.model}, type={request.task_type}, prompt={request.prompt[:50]}...")
     result = acestep_service.release_task(
         request.prompt, request.lyrics, thinking=request.thinking,
@@ -391,7 +420,9 @@ async def acestep_generate(request: AceStepRequest):
         task_type=request.task_type, audio_cover_strength=request.audio_cover_strength,
         repainting_start=request.repainting_start, repainting_end=request.repainting_end,
         src_audio_path=request.src_audio_path, use_adg=request.use_adg,
-        reference_audio_path=request.reference_audio_path, track_name=request.track_name
+        reference_audio_path=request.reference_audio_path, track_name=request.track_name,
+        shift=request.shift, infer_method=request.infer_method,
+        guidance_scale=request.guidance_scale
     )
     if "error" in result and result["error"]:
         logger.error(f"ACE-Step generation error: {result['error']}")
@@ -613,11 +644,16 @@ async def acestep_separate(background_tasks: BackgroundTasks, file: UploadFile =
 @router.post("/separate-url")
 async def acestep_separate_url(request: SeparateRequest, background_tasks: BackgroundTasks):
     try:
-        # P0-2: Handle both local paths and external URLs
-        if request.file_url.startswith(("http://", "https://")):
-            local_path = await download_audio_from_url(request.file_url, ACESTEP_SOURCE_DIR)
+        # Handle source audio localization
+        file_url = request.file_url
+        if file_url.startswith("http"):
+            parsed = urlparse(file_url)
+            if parsed.netloc == "localhost:8100" or not parsed.netloc:
+                local_path = resolve_web_path(parsed.path)
+            else:
+                local_path = await download_audio_from_url(file_url, ACESTEP_SOURCE_DIR)
         else:
-            local_path = resolve_web_path(request.file_url)
+            local_path = resolve_web_path(file_url)
             
         if not local_path or not local_path.exists():
             raise HTTPException(status_code=404, detail="Audio file not found")
