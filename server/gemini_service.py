@@ -164,10 +164,14 @@ def normalize_suno_response(data: dict) -> dict:
 def normalize_model_name(model_name: Optional[str]) -> str:
     """Normalize UI model names to Gemini API supported model names."""
     if not model_name:
-        return "gemini-3-flash-preview"
+        return "gemini-2.5-flash"
 
     model_map = {
-        # Current recommended Gemini 3 models
+        # Current stable models (Recommended)
+        "gemini-2.5-flash": "gemini-2.5-flash",
+        "gemini-2.5-pro": "gemini-2.5-pro",
+
+        # Experimental Gemini 3 models
         "gemini-3-flash": "gemini-3-flash-preview",
         "gemini-3-flash-preview": "gemini-3-flash-preview",
 
@@ -177,16 +181,12 @@ def normalize_model_name(model_name: Optional[str]) -> str:
         "gemini-3.1-flash-lite": "gemini-3.1-flash-lite-preview",
         "gemini-3.1-flash-lite-preview": "gemini-3.1-flash-lite-preview",
 
-        # Stable fallback models
-        "gemini-2.5-flash": "gemini-2.5-flash",
-        "gemini-2.5-pro": "gemini-2.5-pro",
-
         # Legacy aliases
         "gemini-1.5-flash": "gemini-2.5-flash",
         "gemini-1.5-pro": "gemini-2.5-pro",
     }
 
-    return model_map.get(model_name, "gemini-3-flash-preview")
+    return model_map.get(model_name, "gemini-2.5-flash")
 
 async def generate_content_with_fallback(
     model_name: str,
@@ -200,7 +200,7 @@ async def generate_content_with_fallback(
         return await model.generate_content_async(prompt_parts, generation_config=generation_config)
     except Exception as e:
         error_msg = str(e).lower()
-        if "404" in error_msg or "not found" in error_msg or "not supported" in error_msg or "permission_denied" in error_msg:
+        if any(keyword in error_msg for keyword in ["404", "not found", "not supported", "permission_denied", "429", "quota"]):
             logger.warning(f"Primary model {model_name} failed: {e}. Falling back to gemini-2.5-flash.")
             # Ensure we don't try to use pro if flash is already being requested
             if model_name == "gemini-2.5-flash":
@@ -313,7 +313,7 @@ async def generate_suno_prompt(
 ) -> Dict[str, Any]:
     ensure_gemini_configured()
     if options is None:
-        options = {"searchEngine": "none", "modelName": "gemini-3-flash-preview", "lyricsLanguage": "Japanese"}
+        options = {"searchEngine": "none", "modelName": "gemini-2.5-flash", "lyricsLanguage": "Japanese"}
     
     model_name = normalize_model_name(options.get("modelName"))
 
@@ -375,7 +375,10 @@ async def generate_suno_prompt(
         except Exception as e:
             logger.error(f"Gemini API error on attempt {attempt + 1}: {e}")
             if attempt == max_retries - 1:
-                return {"error": f"Gemini API error: {str(e)}"}
+                error_msg = str(e)
+                if "429" in error_msg or "quota" in error_msg.lower():
+                    return {"error": "Gemini API の無料利用枠に達しました。しばらく待ってから再試行するか、Gemini 2.5 Flash に切り替えてください。"}
+                return {"error": f"Gemini API error: {error_msg}"}
             await asyncio.sleep(2)
     
     return {"error": "Failed after max retries"}
@@ -383,7 +386,7 @@ async def generate_suno_prompt(
 async def structure_lyrics(
     raw_lyrics: str,
     language: str = "ja",
-    model_name: str = "gemini-3-flash-preview"
+    model_name: str = "gemini-2.5-flash"
 ) -> str:
     ensure_gemini_configured()
     model_name = normalize_model_name(model_name)
@@ -403,7 +406,7 @@ async def generate_from_selected_title(
 ) -> Dict[str, Any]:
     ensure_gemini_configured()
     if options is None:
-        options = {"modelName": "gemini-3-flash-preview", "lyricsLanguage": "Japanese"}
+        options = {"modelName": "gemini-2.5-flash", "lyricsLanguage": "Japanese"}
     
     model_name = normalize_model_name(options.get("modelName"))
 
@@ -461,7 +464,10 @@ async def generate_from_selected_title(
         except Exception as e:
             logger.error(f"Phase 2 API error on attempt {attempt + 1}: {e}")
             if attempt == max_retries - 1:
-                return {"error": f"Gemini API error: {str(e)}"}
+                error_msg = str(e)
+                if "429" in error_msg or "quota" in error_msg.lower():
+                    return {"error": "Gemini API の無料利用枠に達しました。しばらく待ってから再試行するか、Gemini 2.5 Flash に切り替えてください。"}
+                return {"error": f"Gemini API error: {error_msg}"}
             await asyncio.sleep(2)
             
     return {"error": "Failed after max retries"}
@@ -470,7 +476,7 @@ async def generate_title(
     lyrics: str,
     theme: str,
     prompt: str,
-    model_name: str = "gemini-3-flash-preview"
+    model_name: str = "gemini-2.5-flash"
 ) -> str:
     ensure_gemini_configured()
     model_name = normalize_model_name(model_name)
@@ -489,7 +495,7 @@ async def generate_style_from_lyrics(
     url: str = "",
     theme: str = "",
     language: str = "ja",
-    model_name: str = "gemini-3-flash-preview"
+    model_name: str = "gemini-2.5-flash"
 ) -> str:
     ensure_gemini_configured()
     model_name = normalize_model_name(model_name)

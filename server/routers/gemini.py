@@ -60,7 +60,7 @@ async def generate_suno_prompt(request: PromptRequest):
 class StructureRequest(BaseModel):
     lyrics: str
     language: str = "ja"
-    model_name: str = "gemini-1.5-flash"
+    model_name: str = "gemini-2.5-flash"
 
 @router.post("/structure-lyrics")
 async def structure_lyrics(request: StructureRequest):
@@ -110,7 +110,7 @@ class TitleRequest(BaseModel):
     lyrics: str
     theme: str = ""
     prompt: str = ""
-    model_name: str = "gemini-1.5-flash"
+    model_name: str = "gemini-2.5-flash"
 
 @router.post("/generate-title")
 async def generate_title(request: TitleRequest):
@@ -131,7 +131,7 @@ class StyleRequest(BaseModel):
     url: str = ""
     theme: str = ""
     language: str = "ja"
-    model_name: str = "gemini-1.5-flash"
+    model_name: str = "gemini-2.5-flash"
 
 @router.post("/generate-style-from-lyrics")
 async def generate_style_from_lyrics(request: StyleRequest):

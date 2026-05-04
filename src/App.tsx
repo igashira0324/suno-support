@@ -21,7 +21,7 @@ const App: React.FC = () => {
         result: null,
         error: null,
         searchEngine: 'google-grounding',
-        modelName: 'gemini-3-flash-preview',
+        modelName: 'gemini-2.5-flash',
         enableVideoAnalysis: false,
         lyricsLanguage: 'Japanese',
     });
