@@ -51,8 +51,8 @@ def fetch_url_metadata(url: str) -> Optional[Dict[str, Any]]:
     if "suno.com" in url or "suno.ai" in url:
         try:
             # Internal call to suno analyze
-            from routers.suno import analyze_suno_url
-            data = analyze_suno_url(url)
+            from routers.suno import analyze_suno_logic
+            data = analyze_suno_logic(url)
             if data:
                 return {
                     "title": data.get("title"),
@@ -254,3 +254,35 @@ async def generate_style_from_lyrics(
     prompt = f"Generate a Suno style prompt (comma-separated tags) for these lyrics:\n{lyrics[:1000]}\nTheme: {theme}\nURL Info: {url}"
     response = await model.generate_content_async(prompt)
     return response.text.strip()
+
+async def llm_proxy(body: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Proxies LLM requests to Gemini.
+    """
+    model_name = body.get("model", "gemini-1.5-flash")
+    messages = body.get("messages", [])
+    system_instruction = body.get("system_instruction", SYSTEM_INSTRUCTION)
+    
+    # Simple proxy implementation
+    model = genai.GenerativeModel(
+        model_name=model_name,
+        system_instruction=system_instruction
+    )
+    
+    # Convert message format if needed (Gemini expects history)
+    history = []
+    current_message = ""
+    for msg in messages:
+        if msg["role"] == "user":
+            current_message = msg["content"]
+        elif msg["role"] == "assistant":
+            history.append({"role": "user", "parts": [current_message]})
+            history.append({"role": "model", "parts": [msg["content"]]})
+            current_message = ""
+            
+    if current_message:
+        chat = model.start_chat(history=history)
+        response = await chat.send_message_async(current_message)
+        return {"content": response.text}
+    
+    return {"error": "No user message found"}

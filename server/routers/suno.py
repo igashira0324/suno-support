@@ -5,8 +5,7 @@ from fastapi import APIRouter, HTTPException, Body
 
 router = APIRouter(prefix="/suno", tags=["suno"])
 
-@router.post("/analyze")
-async def analyze_suno(url: str = Body(..., embed=True)):
+def analyze_suno_logic(url: str):
     try:
         resp = requests.get(url, timeout=10)
         resp.raise_for_status()
@@ -31,7 +30,14 @@ async def analyze_suno(url: str = Body(..., embed=True)):
             "provider": "Suno.ai"
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return {"error": str(e)}
+
+@router.post("/analyze")
+async def analyze_suno(url: str = Body(..., embed=True)):
+    result = analyze_suno_logic(url)
+    if "error" in result:
+        raise HTTPException(status_code=500, detail=result["error"])
+    return result
 
 @router.get("/info/{song_id}")
 async def get_suno_info(song_id: str):

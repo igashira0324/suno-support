@@ -119,6 +119,7 @@ def run_separation_task(task_id: str, input_path: Path):
         tasks[task_id]["result"] = {
             "vocals_url": f"/outputs/separated/{task_id}/vocals.wav",
             "instrumental_url": f"/outputs/separated/{task_id}/instrumental.wav",
+            "original_path": f"/uploads/acestep_source/{input_path.name}"
         }
         tasks[task_id]["status"] = "completed"
         tasks[task_id]["progress"] = 100
@@ -331,7 +332,24 @@ async def get_acestep_status(task_id: str):
     }
 
 @router.post("/separate")
-async def acestep_separate(request: SeparateRequest, background_tasks: BackgroundTasks):
+async def acestep_separate(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
+    try:
+        # Save uploaded file
+        ext = Path(file.filename).suffix or ".mp3"
+        file_id = str(uuid.uuid4())
+        filepath = ACESTEP_SOURCE_DIR / f"sep_input_{file_id}{ext}"
+        with open(filepath, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+            
+        task_id = f"sep_{uuid.uuid4().hex[:8]}"
+        tasks[task_id] = {"status": "processing", "progress": 0, "type": "separation"}
+        background_tasks.add_task(run_separation_task, task_id, filepath)
+        return {"task_id": task_id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/separate-url")
+async def acestep_separate_url(request: SeparateRequest, background_tasks: BackgroundTasks):
     try:
         local_path = resolve_web_path(request.file_url)
         task_id = f"sep_{uuid.uuid4().hex[:8]}"
@@ -346,7 +364,7 @@ async def acestep_voice_convert(
     background_tasks: BackgroundTasks,
     instrumental_url: str = Form(...),
     vocals_url: str = Form(...),
-    reference_file: UploadFile = File(...),
+    reference_audio: UploadFile = File(...),
     original_url: Optional[str] = Form(None),
     diffusion_steps: int = Form(50),
     f0_condition: bool = Form(True),
@@ -358,9 +376,9 @@ async def acestep_voice_convert(
         vox_path = resolve_web_path(vocals_url)
         orig_path = resolve_web_path(original_url) if original_url else None
         
-        ref_path = ACESTEP_SOURCE_DIR / f"ref_{uuid.uuid4().hex[:8]}{Path(reference_file.filename).suffix}"
+        ref_path = ACESTEP_SOURCE_DIR / f"ref_{uuid.uuid4().hex[:8]}{Path(reference_audio.filename).suffix}"
         with open(ref_path, "wb") as buffer:
-            shutil.copyfileobj(reference_file.file, buffer)
+            shutil.copyfileobj(reference_audio.file, buffer)
             
         task_id = f"vc_{uuid.uuid4().hex[:8]}"
         tasks[task_id] = {"status": "processing", "progress": 0, "type": "voice_conversion"}
@@ -411,6 +429,13 @@ async def acestep_clap_search(request: CLAPSearchRequest):
     if not fs_path.exists(): raise HTTPException(status_code=404, detail="File not found")
     import clap_service
     return clap_service.get_clap_service().search_by_text(str(fs_path), request.query, window_sec=request.window_sec, top_k=request.top_k)
+
+@router.get("/clap/presets")
+async def get_clap_presets():
+    """Return standard presets for CLAP search from service"""
+    import clap_service
+    presets = clap_service.get_clap_service().get_preset_queries()
+    return {"presets": presets}
 
 @router.post("/post-process")
 async def acestep_post_process(request: PostProcessRequest):
