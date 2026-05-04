@@ -502,90 +502,29 @@ async def get_acestep_status(task_id: str):
                         or []
                     )
 
-            elif "output_files" in res_data:
-                files = res_data.get("output_files") or []
-
-        # P3: Localize generated files to Backend outputs to prevent link breakage
-        localized_files = []
-        task_output_dir = ACESTEP_LOCAL_DIR / task_id
-        
-        for idx, f in enumerate(files):
-            raw_url = f.get("url") if isinstance(f, dict) else f
-            label = f.get("label", "Generated Audio") if isinstance(f, dict) else "Generated Audio"
-            
-            if not raw_url: continue
-            
-            # If already localized, skip
-            if "/outputs/acestep_generated/" in str(raw_url):
-                localized_files.append(f)
-                continue
-
-            actual_path = None
-            if "path=" in str(raw_url):
-                try:
-                    actual_path = raw_url.split("path=")[1]
-                    actual_path = unquote(actual_path)
-                except: actual_path = None
-            elif str(raw_url).startswith("/") or re.match(r"^[A-Za-z]:\\", str(raw_url)):
-                actual_path = raw_url
-            
-            if actual_path and os.path.exists(actual_path):
-                task_output_dir.mkdir(parents=True, exist_ok=True)
-                ext = Path(actual_path).suffix or ".mp3"
-                local_filename = f"generated_{idx}{ext}"
-                local_dest = task_output_dir / local_filename
-                
-                try:
-                    if not local_dest.exists():
-                        shutil.copy2(actual_path, local_dest)
-                    
-                    localized_files.append({
-                        "url": f"/outputs/acestep_generated/{task_id}/{local_filename}",
-                        "label": label
-                    })
-                except Exception as copy_err:
-                    logger.error(f"Failed to localize ACE-Step file: {copy_err}")
-                    localized_files.append(f)
-            else:
-                localized_files.append(f)
-        
-        output_files = localized_files
-
             elif "files" in res_data:
                 files = res_data.get("files") or []
 
             elif "merged_url" in res_data:
-                output_files.append({
-                    "url": normalize_acestep_audio_url(res_data["merged_url"]),
-                    "label": "Merged Output"
-                })
+                files = [{"url": res_data["merged_url"], "label": "Merged Output"}]
 
             elif "vocals_url" in res_data:
-                # Separation task result
-                output_files.append({
-                    "url": normalize_acestep_audio_url(res_data["vocals_url"]),
-                    "label": "Vocals",
-                    "type": "vocals"
-                })
+                files = [{"url": res_data["vocals_url"], "label": "Vocals", "type": "vocals"}]
                 if "instrumental_url" in res_data:
-                    output_files.append({
-                        "url": normalize_acestep_audio_url(res_data["instrumental_url"]),
-                        "label": "Instrumental",
-                        "type": "instrumental"
-                    })
-
+                    files.append({"url": res_data["instrumental_url"], "label": "Instrumental", "type": "instrumental"})
+            
             else:
-
                 # Single dict output case
                 files = [res_data]
 
+        # Step 1: Initial normalization (convert everything to dicts with labels)
         for f in files:
             raw = None
             label = "Generated Audio"
+            file_type = None
 
             if isinstance(f, str):
                 raw = f
-
             elif isinstance(f, dict):
                 raw = (
                     f.get("url")
@@ -596,18 +535,52 @@ async def get_acestep_status(task_id: str):
                     or f.get("output")
                 )
                 label = f.get("label") or f.get("name") or f.get("filename") or label
+                file_type = f.get("type")
 
             if raw:
-                output_files.append({
+                item = {
                     "url": normalize_acestep_audio_url(str(raw)),
                     "label": label
-                })
+                }
+                if file_type:
+                    item["type"] = file_type
+                output_files.append(item)
+
+        # Step 2: Localization (Copy to local outputs folder to prevent link expiration)
+        task_output_dir = ACESTEP_LOCAL_DIR / task_id
+        localized_results = []
+        
+        for idx, item in enumerate(output_files):
+            url = item["url"]
+            actual_path = None
+            if "path=" in url:
+                try:
+                    actual_path = url.split("path=")[1]
+                    actual_path = unquote(actual_path)
+                except: pass
+            elif url.startswith("/") or re.match(r"^[A-Za-z]:\\", url):
+                actual_path = url
+            
+            if actual_path and os.path.exists(actual_path):
+                try:
+                    task_output_dir.mkdir(parents=True, exist_ok=True)
+                    ext = Path(actual_path).suffix or ".mp3"
+                    local_filename = f"generated_{idx}{ext}"
+                    local_dest = task_output_dir / local_filename
+                    
+                    if not local_dest.exists():
+                        shutil.copy2(actual_path, local_dest)
+                    
+                    item["url"] = f"/outputs/acestep_generated/{task_id}/{local_filename}"
+                except Exception as e:
+                    logger.error(f"Failed to localize file {actual_path}: {e}")
+            
+            localized_results.append(item)
+            
+        output_files = localized_results
 
         if not output_files:
-            logger.error(
-                f"ACE-Step completed but no output files parsed. "
-                f"task_id={task_id}, raw_result={result.get('result')}"
-            )
+            logger.error(f"ACE-Step completed but no output files parsed. task_id={task_id}")
 
     logger.debug(f"Task {task_id} status: {status}, files: {len(output_files)}")
 
