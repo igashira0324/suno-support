@@ -1,4 +1,5 @@
 import logging
+import shutil
 from fastapi import FastAPI
 from core.config import settings
 from core.cors import setup_cors
@@ -10,6 +11,15 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("SunoArchitect")
 
 app = FastAPI(title="Suno AI Backend", version="1.0.0")
+
+@app.on_event("startup")
+async def startup_event():
+    # P1: FFmpeg check
+    ffmpeg_path = shutil.which("ffmpeg")
+    if ffmpeg_path:
+        logger.info(f"FFmpeg found at: {ffmpeg_path}")
+    else:
+        logger.warning("FFmpeg NOT found in PATH. Audio transcoding (transcode_to_mp3) will fail!")
 
 # Setup CORS
 setup_cors(app)

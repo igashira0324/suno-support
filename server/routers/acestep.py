@@ -7,6 +7,8 @@ import requests
 import json
 import ast
 import time
+import sys
+import subprocess
 from pathlib import Path
 from urllib.parse import quote, unquote, urlparse
 from typing import Optional, List, Dict
@@ -38,10 +40,13 @@ def to_web_path(path: Path) -> str:
 
     return str(path)
 
+logger = logging.getLogger("SunoArchitect.AceStep")
+
 def transcode_to_mp3(src_path: Path, dst_path: Optional[Path] = None, bitrate: str = "320k") -> Path:
     """
     Convert audio file to MP3 using pydub/ffmpeg.
     If src is already mp3, returns src_path unless dst_path is specified.
+    P1: Now checks if source is newer than existing destination.
     """
     src_path = Path(src_path)
 
@@ -52,9 +57,10 @@ def transcode_to_mp3(src_path: Path, dst_path: Optional[Path] = None, bitrate: s
 
     dst_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Return if destination already exists and is not empty
+    # Return if destination already exists, is not empty, and is newer than source
     if dst_path.exists() and dst_path.stat().st_size > 0:
-        return dst_path
+        if dst_path.suffix.lower() == ".mp3" and dst_path.stat().st_mtime >= src_path.stat().st_mtime:
+            return dst_path
 
     # If already mp3 and same path, just return
     if src_path.suffix.lower() == ".mp3" and src_path.resolve() == dst_path.resolve():
@@ -66,11 +72,9 @@ def transcode_to_mp3(src_path: Path, dst_path: Optional[Path] = None, bitrate: s
         audio.export(str(dst_path), format="mp3", bitrate=bitrate)
         return dst_path
     except Exception as e:
-        # Fallback or re-raise
-        print(f"Error transcoding to mp3: {e}")
+        logger.exception(f"Error transcoding to mp3: {src_path} -> {dst_path}")
         raise e
 
-logger = logging.getLogger("SunoArchitect.AceStep")
 
 router = APIRouter(prefix="/acestep", tags=["acestep"])
 ACESTEP_LOCAL_DIR = settings.output_dir / "acestep_generated"
@@ -300,6 +304,7 @@ def run_voice_conversion_task(
         
         if tasks[task_id].get("status") == "cancelled": return
         
+        start_time_vc = time.time()
         tasks[task_id]["status"] = "processing"
         tasks[task_id]["progress"] = 5
         
@@ -361,7 +366,10 @@ def run_voice_conversion_task(
         tasks[task_id]["progress"] = 100
         tasks[task_id]["result"] = {
             "merged_url": f"/outputs/voice_converted/{task_id}/merged_output.mp3",
-            "merged_wav_url": f"/outputs/voice_converted/{task_id}/merged_output.wav"
+            "merged_wav_url": f"/outputs/voice_converted/{task_id}/merged_output.wav",
+            "processing_time": round(time.time() - start_time_vc, 2),
+            "format": "mp3",
+            "bitrate": "320k"
         }
     except Exception as e:
         logger.error(f"VC failed: {e}")
@@ -373,7 +381,18 @@ def run_voice_conversion_task(
 async def acestep_upload_source(file: UploadFile = File(...)):
     # Legacy wrapper
     try:
-        ext = Path(file.filename).suffix or ".mp3"
+        # P1: Preserve original extension or guess from content type
+        orig_ext = Path(file.filename).suffix
+        if not orig_ext:
+            if "audio/mpeg" in file.content_type:
+                ext = ".mp3"
+            elif "audio/wav" in file.content_type or "audio/x-wav" in file.content_type:
+                ext = ".wav"
+            else:
+                ext = ".mp3" # Default fallback
+        else:
+            ext = orig_ext
+
         file_id = str(uuid.uuid4())
         filename = f"{file_id}{ext}"
         filepath = ACESTEP_SOURCE_DIR / filename
@@ -653,12 +672,12 @@ async def get_acestep_status(task_id: str):
                             try:
                                 transcode_to_mp3(src_path, local_dest)
                             except Exception as trans_err:
+                                # P1: Don't fake .mp3 if transcode fails. Outer catch will handle.
                                 logger.error(f"Transcode failed during localization: {trans_err}")
-                                # Fallback to copy even if extension mismatch (UI might handle)
-                                shutil.copy2(src_path, local_dest)
+                                raise trans_err
                     
                     item["url"] = f"/outputs/acestep_generated/{task_id}/{local_filename}"
-                    item["format"] = "mp3"
+                    item["format"] = local_filename.split(".")[-1]
                 except Exception as e:
                     logger.error(f"Failed to localize file {actual_path}: {e}")
             
@@ -808,12 +827,21 @@ async def acestep_post_process(request: PostProcessRequest):
         local_path = resolve_web_path(request.file_url)
         y, sr = librosa.load(str(local_path), sr=None, mono=False)
         
-        # Fade out
-        fade_samples = int(request.fade_duration * sr)
+        # P2: Auto Trim (Simple silence removal)
+        if request.auto_trim:
+            y, _ = librosa.effects.trim(y, top_db=30)
+
+        # P1: Fade out (Clamped to avoid crash for short audio)
+        total_samples = y.shape[-1] if y.ndim > 1 else len(y)
+        fade_samples = min(int(request.fade_duration * sr), total_samples)
+        
         if fade_samples > 0:
             fade_curve = np.linspace(1.0, 0.0, fade_samples) ** 2
-            if y.ndim > 1: y[:, -fade_samples:] *= fade_curve
-            else: y[-fade_samples:] *= fade_curve
+            if y.ndim > 1:
+                # Multiply fade curve across all channels
+                y[:, -fade_samples:] *= fade_curve[np.newaxis, :]
+            else:
+                y[-fade_samples:] *= fade_curve
             
         processed_wav = MERGED_DIR / f"proc_{uuid.uuid4().hex[:8]}.wav"
         sf.write(str(processed_wav), y.T if y.ndim > 1 else y, sr)
