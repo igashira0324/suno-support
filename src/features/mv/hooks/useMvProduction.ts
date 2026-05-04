@@ -164,14 +164,19 @@ export const useMvProduction = () => {
         }
     };
 
-    const loadClapPresets = async () => {
+    const presetsLoadedRef = useRef(false);
+    const loadClapPresets = useCallback(async () => {
+        if (presetsLoadedRef.current) return;
         try {
+            presetsLoadedRef.current = true;
             const data = await mvApi.getClapPresets();
             setClapPresets(data.presets || []);
         } catch (e) {
+            presetsLoadedRef.current = false;
             console.error(e);
         }
-    };
+    }, []);
+
 
     const handleConvertAndMerge = async () => {
         if (!state.result?.instrumental_url || !state.result?.vocals_url || !voiceChange.newVocalsFile) return;

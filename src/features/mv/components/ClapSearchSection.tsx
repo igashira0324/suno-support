@@ -23,8 +23,11 @@ export const ClapSearchSection: React.FC<ClapSearchSectionProps> = ({
     const [isExpanded, setIsExpanded] = useState(false);
 
     useEffect(() => {
-        onLoadPresets();
-    }, [onLoadPresets]);
+        if (presets.length === 0) {
+            onLoadPresets();
+        }
+    }, [presets.length, onLoadPresets]);
+
 
     return (
         <div className="bg-slate-950/50 border border-slate-800 rounded-3xl overflow-hidden">

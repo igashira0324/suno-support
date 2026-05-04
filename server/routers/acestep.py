@@ -6,6 +6,7 @@ import logging
 import re
 import requests
 import json
+import ast
 import subprocess
 import sys
 import time
@@ -449,8 +450,11 @@ async def get_acestep_status(task_id: str):
         if isinstance(res_data, str):
             try:
                 res_data = json.loads(res_data)
-            except Exception as e:
-                logger.warning(f"Failed to parse ACE-Step result JSON: {e}, raw={res_data[:500] if isinstance(res_data, str) else res_data}")
+            except Exception:
+                try:
+                    res_data = ast.literal_eval(res_data)
+                except Exception as e:
+                    logger.warning(f"Failed to parse ACE-Step result: {e}, raw={res_data[:500] if isinstance(res_data, str) else res_data}")
 
         files = []
 
@@ -458,7 +462,27 @@ async def get_acestep_status(task_id: str):
             files = res_data
 
         elif isinstance(res_data, dict):
-            if "data" in res_data:
+            # Check for nested result first
+            if "result" in res_data:
+                nested = res_data["result"]
+                if isinstance(nested, list):
+                    files = nested
+                elif isinstance(nested, dict):
+                    files = [nested]
+                elif isinstance(nested, str):
+                    try:
+                        nested = json.loads(nested)
+                    except Exception:
+                        try:
+                            nested = ast.literal_eval(nested)
+                        except Exception:
+                            nested = None
+                    if isinstance(nested, list):
+                        files = nested
+                    elif isinstance(nested, dict):
+                        files = [nested]
+
+            if not files and "data" in res_data:
                 data = res_data["data"]
 
                 if isinstance(data, list):
