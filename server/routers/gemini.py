@@ -48,8 +48,11 @@ async def generate_suno_prompt(request: PromptRequest):
             theme=request.theme
         )
         if isinstance(result, dict) and result.get("error"):
+            # If the service returned an error dictionary, raise it as a real exception
             raise HTTPException(status_code=500, detail=result.get("error"))
         return result
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Gemini generation failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -94,7 +97,11 @@ async def generate_from_selected_title(request: Phase2Request):
             style_candidates=request.style_candidates,
             options=request.options
         )
+        if isinstance(result, dict) and result.get("error"):
+            raise HTTPException(status_code=500, detail=result.get("error"))
         return result
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Phase 2 generation failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))

@@ -58,12 +58,10 @@ const App: React.FC = () => {
 
             if (
                 !result ||
-                typeof result.analysis !== 'string' ||
-                !Array.isArray(result.titleCandidates) ||
-                !Array.isArray(result.styleCandidates)
+                typeof result.analysis !== 'string'
             ) {
                 console.error('Invalid Gemini response:', result);
-                throw new Error('Geminiの応答形式が不正です。もう一度お試しください。');
+                throw new Error('Geminiの分析結果が取得できませんでした。もう一度お試しください。');
             }
 
             // Phase 1: Clear bestSelection/alternativeSelection to show title selection UI

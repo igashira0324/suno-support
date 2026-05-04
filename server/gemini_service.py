@@ -2,6 +2,7 @@ import os
 import json
 import logging
 import requests
+import re
 import google.generativeai as genai
 from typing import Optional, List, Dict, Any
 from core.config import settings
@@ -11,6 +12,145 @@ logger = logging.getLogger("SunoArchitect.GeminiService")
 # Configure Gemini
 if settings.gemini_api_key:
     genai.configure(api_key=settings.gemini_api_key)
+
+def parse_gemini_json_text(text: str) -> dict:
+    """
+    Safely parse JSON from Gemini's response, handling markdown blocks and extra text.
+    """
+    if not text:
+        raise ValueError("Gemini returned empty text")
+
+    cleaned = text.strip()
+
+    # Remove ```json ... ``` or ``` ... ``` code blocks
+    if cleaned.startswith("```"):
+        cleaned = re.sub(r"^```(?:json)?", "", cleaned, flags=re.IGNORECASE).strip()
+        cleaned = re.sub(r"```$", "", cleaned).strip()
+
+    # If extra text remains, extract only the first { to the last }
+    start = cleaned.find("{")
+    end = cleaned.rfind("}")
+
+    if start != -1 and end != -1 and end > start:
+        cleaned = cleaned[start:end + 1]
+
+    try:
+        return json.loads(cleaned)
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to parse JSON: {e}. Cleaned text: {cleaned[:200]}...")
+        raise
+
+def normalize_suno_response(data: dict) -> dict:
+    """
+    Normalize Gemini response to the expected SunoResponse format for the frontend.
+    Handles missing or differently named fields.
+    """
+    if not isinstance(data, dict):
+        raise ValueError("Gemini response is not a JSON object")
+
+    # 1. Normalize analysis
+    analysis = (
+        data.get("analysis")
+        or data.get("分析")
+        or data.get("description")
+        or data.get("summary")
+        or ""
+    )
+
+    # 2. Normalize title candidates
+    title_candidates = (
+        data.get("titleCandidates")
+        or data.get("title_candidates")
+        or data.get("titles")
+        or data.get("generatedTitles")
+        or []
+    )
+
+    # 3. Normalize style candidates
+    style_candidates = (
+        data.get("styleCandidates")
+        or data.get("style_candidates")
+        or data.get("styles")
+        or []
+    )
+
+    # 4. Normalize generated selections
+    generated_selections = (
+        data.get("generatedSelections")
+        or data.get("generated_selections")
+        or data.get("selections")
+        or []
+    )
+
+    # Fallback title/style from selections if candidates are empty
+    if not title_candidates and isinstance(generated_selections, list):
+        title_candidates = [
+            item.get("title", "")
+            for item in generated_selections
+            if isinstance(item, dict) and item.get("title")
+        ]
+
+    if not style_candidates and isinstance(generated_selections, list):
+        style_candidates = [
+            item.get("style", "")
+            for item in generated_selections
+            if isinstance(item, dict) and item.get("style")
+        ]
+
+    # Ensure they are lists of strings
+    if not isinstance(title_candidates, list):
+        title_candidates = [str(title_candidates)]
+    if not isinstance(style_candidates, list):
+        style_candidates = [str(style_candidates)]
+
+    title_candidates = [str(x) for x in title_candidates if x]
+    style_candidates = [str(x) for x in style_candidates if x]
+
+    # Defaults if still empty
+    if not title_candidates:
+        title_candidates = ["Untitled Song"]
+    if not style_candidates:
+        style_candidates = ["J-pop, emotional, cinematic"]
+
+    def normalize_selection(item: dict | None, fallback_title: str, fallback_style: str) -> dict:
+        if not isinstance(item, dict):
+            item = {}
+        return {
+            "title": item.get("title") or fallback_title,
+            "style": item.get("style") or fallback_style,
+            "instrumental": bool(item.get("instrumental", False)),
+            "content": item.get("content") or item.get("lyrics") or "",
+            "comment": item.get("comment") or item.get("description") or "",
+        }
+
+    best_selection = data.get("bestSelection") or data.get("best_selection")
+    alternative_selection = data.get("alternativeSelection") or data.get("alternative_selection")
+
+    # Fallback selections from generated_selections list
+    if not best_selection and generated_selections:
+        best_selection = generated_selections[0]
+    if not alternative_selection and len(generated_selections) >= 2:
+        alternative_selection = generated_selections[1]
+
+    normalized = {
+        "analysis": str(analysis),
+        "titleCandidates": title_candidates,
+        "styleCandidates": style_candidates,
+        "bestSelection": normalize_selection(
+            best_selection,
+            title_candidates[0],
+            style_candidates[0],
+        ),
+        "alternativeSelection": normalize_selection(
+            alternative_selection,
+            title_candidates[1] if len(title_candidates) > 1 else title_candidates[0],
+            style_candidates[1] if len(style_candidates) > 1 else style_candidates[0],
+        ),
+        "generatedSelections": generated_selections if isinstance(generated_selections, list) else [],
+        "generatedTitles": title_candidates,
+    }
+
+    return normalized
 
 def normalize_model_name(model_name: Optional[str]) -> str:
     """Normalize UI model names to Gemini API supported model names."""
@@ -89,6 +229,28 @@ SYSTEM_INSTRUCTION = """
 
 ## タイトル候補
 - **「日本語タイトル / English Title」** の形式で出力してください。必ず日本語と英語を併記してください。
+
+## JSON出力形式
+必ず以下のキーを持つ有効なJSON形式で出力してください。
+{
+  "analysis": "楽曲の分析結果を日本語で記述",
+  "titleCandidates": ["タイトル候補1", "タイトル候補2", ...],
+  "styleCandidates": ["スタイル候補1", "スタイル候補2", ...],
+  "bestSelection": {
+    "title": "最適なタイトル",
+    "style": "詳細なスタイルプロンプト",
+    "instrumental": false,
+    "content": "歌詞プロンプト",
+    "comment": "制作上のアドバイス"
+  },
+  "alternativeSelection": {
+    "title": "別のタイトル",
+    "style": "別のアプローチのスタイルプロンプト",
+    "instrumental": false,
+    "content": "別の歌詞プロンプト",
+    "comment": "制作上のアドバイス"
+  }
+}
 """
 
 OEMBED_PROVIDERS = [
@@ -179,7 +341,7 @@ async def generate_suno_prompt(
     prompt_parts.append(meta_prompt)
 
     generation_config = {
-        "temperature": 0.2,
+        "temperature": 0.4,
         "response_mime_type": "application/json"
     }
 
@@ -193,17 +355,18 @@ async def generate_suno_prompt(
                 generation_config=generation_config,
                 system_instruction=SYSTEM_INSTRUCTION
             )
-            return json.loads(response.text)
-        except json.JSONDecodeError as e:
-            logger.warning(f"JSON parse error on attempt {attempt + 1}: {e}. Retrying...")
+            parsed = parse_gemini_json_text(response.text)
+            return normalize_suno_response(parsed)
+        except (json.JSONDecodeError, ValueError) as e:
+            logger.warning(f"JSON parse/normalization error on attempt {attempt + 1}: {e}. Retrying...")
             if attempt == max_retries - 1:
                 logger.error(f"Failed to parse Gemini response after {max_retries} attempts")
-                return {"error": "Failed to parse AI response", "raw": response.text if 'response' in locals() else ""}
+                return {"error": f"Failed to parse AI response: {str(e)}", "raw": response.text if 'response' in locals() else ""}
             await asyncio.sleep(1)
         except Exception as e:
             logger.error(f"Gemini API error on attempt {attempt + 1}: {e}")
             if attempt == max_retries - 1:
-                raise
+                return {"error": f"Gemini API error: {str(e)}"}
             await asyncio.sleep(2)
     
     return {"error": "Failed after max retries"}
@@ -261,7 +424,7 @@ async def generate_from_selected_title(
         prompt += "\n[言語指定] 歌詞のベースは「日本語」としてください。\n"
 
     generation_config = {
-        "temperature": 0.3,
+        "temperature": 0.4,
         "response_mime_type": "application/json"
     }
 
@@ -275,11 +438,12 @@ async def generate_from_selected_title(
                 generation_config=generation_config,
                 system_instruction=SYSTEM_INSTRUCTION
             )
-            data = json.loads(response.text)
-            data["bestSelection"]["title"] = selected_title
-            data["alternativeSelection"]["title"] = selected_title
-            return data
-        except json.JSONDecodeError as e:
+            parsed = parse_gemini_json_text(response.text)
+            normalized = normalize_suno_response(parsed)
+            normalized["bestSelection"]["title"] = selected_title
+            normalized["alternativeSelection"]["title"] = selected_title
+            return normalized
+        except (json.JSONDecodeError, ValueError) as e:
             logger.warning(f"Phase 2 JSON parse error on attempt {attempt + 1}: {e}. Retrying...")
             if attempt == max_retries - 1:
                 logger.error(f"Failed to parse Phase 2 response after {max_retries} attempts")
@@ -288,7 +452,7 @@ async def generate_from_selected_title(
         except Exception as e:
             logger.error(f"Phase 2 API error on attempt {attempt + 1}: {e}")
             if attempt == max_retries - 1:
-                raise
+                return {"error": f"Gemini API error: {str(e)}"}
             await asyncio.sleep(2)
             
     return {"error": "Failed after max retries"}
@@ -325,9 +489,9 @@ async def generate_style_from_lyrics(
     return response.text.strip()
 
 async def llm_proxy(body: Dict[str, Any]) -> Dict[str, Any]:
-    """
+    \"\"\"
     Proxies LLM requests to Gemini.
-    """
+    \"\"\"
     ensure_gemini_configured()
     model_name = normalize_model_name(body.get("model"))
     messages = body.get("messages", [])
