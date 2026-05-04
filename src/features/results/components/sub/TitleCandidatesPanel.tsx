@@ -22,7 +22,7 @@ export const TitleCandidatesPanel: React.FC<TitleCandidatesPanelProps> = ({
                     <FileText className="w-5 h-5" />
                     <h3 className="font-semibold uppercase tracking-wider text-sm">タイトル候補</h3>
                 </div>
-                {onTitleSelect && <span className="text-xs text-pink-300/60">タイトルを選んで生成 →</span>}
+                {onTitleSelect && <span className="text-xs text-pink-300/60">タイトルを選んで歌詞生成 →</span>}
             </div>
             <ul className="space-y-3 flex-1">
                 {titles.map((title, idx) => {
@@ -45,7 +45,7 @@ export const TitleCandidatesPanel: React.FC<TitleCandidatesPanelProps> = ({
                                         className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-pink-600/80 hover:bg-pink-500 text-white text-xs font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
                                         {isGeneratingPhase2 ? <Loader2 className="w-3 h-3 animate-spin" /> : <ArrowRight className="w-3 h-3" />}
-                                        生成
+                                        歌詞生成
                                     </button>
                                 )}
                                 {isGenerated && <span className="text-xs text-emerald-400 font-bold">生成済み</span>}

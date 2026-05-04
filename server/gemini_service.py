@@ -132,6 +132,15 @@ def normalize_suno_response(data: dict) -> dict:
     if not alternative_selection and len(generated_selections) >= 2:
         alternative_selection = generated_selections[1]
 
+    # Only include titles that have actually been generated for
+    generated_titles = (
+        data.get("generatedTitles")
+        or data.get("generated_titles")
+        or []
+    )
+    if not isinstance(generated_titles, list):
+        generated_titles = []
+
     normalized = {
         "analysis": str(analysis),
         "titleCandidates": title_candidates,
@@ -147,7 +156,7 @@ def normalize_suno_response(data: dict) -> dict:
             style_candidates[1] if len(style_candidates) > 1 else style_candidates[0],
         ),
         "generatedSelections": generated_selections if isinstance(generated_selections, list) else [],
-        "generatedTitles": title_candidates,
+        "generatedTitles": generated_titles,
     }
 
     return normalized

@@ -69,8 +69,8 @@ const App: React.FC = () => {
                 ...result,
                 titleCandidates: result.titleCandidates ?? [],
                 styleCandidates: result.styleCandidates ?? [],
-                generatedSelections: result.generatedSelections ?? [],
-                generatedTitles: result.generatedTitles ?? [],
+                generatedSelections: [],
+                generatedTitles: [],
                 bestSelection: { title: '', style: '', instrumental: false, content: '', comment: '' },
                 alternativeSelection: { title: '', style: '', instrumental: false, content: '', comment: '' },
             };
