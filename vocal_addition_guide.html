@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Vocal Addition Guide - Suno Architect Suite</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --card-bg: rgba(30, 41, 59, 0.7);
+            --accent: #4f46e5;
+            --accent-pink: #db27177;
+            --text: #f8fafc;
+        }
+
+        body {
+            background: radial-gradient(circle at top left, #1e1b4b, #0f172a);
+            color: var(--text);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 40px 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .container {
+            max-width: 900px;
+            width: 100%;
+        }
+
+        .glass {
+            background: var(--card-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 24px;
+            padding: 40px;
+            margin-bottom: 40px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            animation: fadeIn 0.8s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        h1 {
+            font-size: 3rem;
+            font-weight: 800;
+            background: linear-gradient(to right, #818cf8, #f472b6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: #94a3b8;
+            font-size: 1.2rem;
+            margin-bottom: 40px;
+        }
+
+        .hero-img {
+            width: 100%;
+            border-radius: 16px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            border: 1px solid rgba(79, 70, 229, 0.3);
+        }
+
+        .method-card {
+            margin-bottom: 30px;
+            padding: 25px;
+            border-radius: 16px;
+            background: rgba(255, 255, 255, 0.03);
+            border-left: 4px solid var(--accent);
+            transition: transform 0.3s ease;
+        }
+
+        .method-card:hover {
+            transform: translateX(10px);
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .method-title {
+            color: #c084fc;
+            font-weight: bold;
+            font-size: 1.4rem;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .mermaid {
+            background: rgba(255, 255, 255, 0.02);
+            padding: 20px;
+            border-radius: 12px;
+            margin: 20px 0;
+        }
+
+        .badge {
+            background: var(--accent);
+            padding: 4px 12px;
+            border-radius: 99px;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            font-weight: bold;
+        }
+
+        .step-list {
+            list-style: none;
+            padding: 0;
+        }
+
+        .step-list li {
+            margin-bottom: 12px;
+            display: flex;
+            gap: 10px;
+        }
+
+        .step-num {
+            color: var(--accent);
+            font-weight: bold;
+        }
+
+        .footer {
+            text-align: center;
+            color: #64748b;
+            margin-top: 40px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="glass">
+            <h1>インストにボーカルを乗せる</h1>
+            <p class="subtitle">AIを活用した3つの最新アプローチ</p>
+            
+            <img src="C:\Users\igashira\.gemini\antigravity\brain\7718edf5-d67c-40fa-bf38-4795cb8471f1\ai_vocal_overlay_concept_1775897718282.png" alt="Concept Image" class="hero-img">
+
+            <div class="method-card">
+                <div class="method-title">
+                    <span class="badge">推奨</span> 方法1: LEGOモード (ローカル環境)
+                </div>
+                <p>本スイートの「AceStepTab」に搭載されている機能です。既存のトラックをベースに、特定のパート（ボーカル等）を「継ぎ足し」ます。</p>
+                <ul class="step-list">
+                    <li><span class="step-num">01.</span> AceStepTab を開き、Task Type で <strong>Lego (Overlay)</strong> を選択。</li>
+                    <li><span class="step-num">02.</span> 基となるインスト音源をアップロード。</li>
+                    <li><span class="step-num">03.</span> 歌詞とプロンプトを入力し、Track Name に <code>vocals</code> と指定して生成。</li>
+                </ul>
+            </div>
+
+            <div class="method-card">
+                <div class="method-title">
+                    方法2: Upload & Extend (本家Suno Web)
+                </div>
+                <p>Suno AI の公式機能を使用する方法です。インストをアップロードし、その楽曲の「続き」または「上書き」として生成します。</p>
+                <ul class="step-list">
+                    <li><span class="step-num">01.</span> Suno.ai の Library から「Upload Audio」を選択。</li>
+                    <li><span class="step-num">02.</span> アップロードした曲の「Extend」をクリック。</li>
+                    <li><span class="step-num">03.</span> 秒数を <code>0:00</code> からに設定し、歌詞を入力して生成。</li>
+                </ul>
+            </div>
+
+            <div class="method-card">
+                <div class="method-title">
+                    方法3: ADG (Audio Directed Generation)
+                </div>
+                <p>音源の「雰囲気」や「構造」をAIに読み取らせ、それに合うボーカルスタイルを自動調整します。</p>
+                <div class="mermaid">
+                    graph TD
+                        A[インスト音源] --> B[AI構造解析]
+                        B --> C[ADGプロンプト生成]
+                        C --> D[ボーカル付与]
+                        D --> E[完成]
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            Developed by Antigravity AI
+        </div>
+    </div>
+
+    <script>
+        mermaid.initialize({ startOnLoad: true, theme: 'dark' });
+    </script>
+</body>
+</html>

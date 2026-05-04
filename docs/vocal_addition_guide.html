@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ACE-Step 1.5 - Vocal Addition Guide (Lego Mode)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        mermaid.initialize({ startOnLoad: true, theme: 'dark' });
+    </script>
+    <style>
+        body {
+            background-color: #0f172a;
+            color: #f8fafc;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+        .hero-gradient {
+            background: linear-gradient(135deg, #2e1065 0%, #4c1d95 50%, #6d28d9 100%);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+        .text-gradient {
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-image: linear-gradient(to right, #a78bfa, #8b5cf6);
+        }
+        .pulse-border {
+            animation: pulse-border 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        @keyframes pulse-border {
+            0%, 100% { border-color: rgba(139, 92, 246, 0.5); box-shadow: 0 0 10px rgba(139, 92, 246, 0.2); }
+            50% { border-color: rgba(139, 92, 246, 1); box-shadow: 0 0 20px rgba(139, 92, 246, 0.6); }
+        }
+        .slide-up {
+            animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            opacity: 0;
+            transform: translateY(20px);
+        }
+        .delay-1 { animation-delay: 0.1s; }
+        .delay-2 { animation-delay: 0.2s; }
+        .delay-3 { animation-delay: 0.3s; }
+        @keyframes slideUp {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+    </style>
+</head>
+<body class="min-h-screen relative overflow-x-hidden">
+    <!-- Header -->
+    <header class="hero-gradient py-12 relative overflow-hidden">
+        <div class="absolute inset-0 opacity-20 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMiIgY3k9IjIiIHI9IjIiIGZpbGw9IiNmZmZmZmYiLz48L3N2Zz4=')] [background-size:20px_20px]"></div>
+        <div class="container mx-auto px-6 relative z-10">
+            <div class="flex items-center gap-4 mb-4 slide-up">
+                <div class="p-3 bg-violet-500/20 rounded-xl border border-violet-500/30 text-violet-400">
+                    <svg class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path></svg>
+                </div>
+                <h1 class="text-4xl md:text-5xl font-black tracking-tight">ACE-Step 1.5 <br/><span class="text-gradient">Vocal Addition Guide</span></h1>
+            </div>
+            <p class="text-slate-300 max-w-2xl text-lg slide-up delay-1">
+                既存のインストゥルメンタル楽曲（BGM）に、AI生成による「ボーカル（歌詞）」を高精度で追加するためのワークフロー解説です。Legoモードを活用します。
+            </p>
+        </div>
+    </header>
+
+    <main class="container mx-auto px-6 py-12 space-y-12">
+        
+        <!-- Why Lego Mode? -->
+        <section class="glass-panel p-8 slide-up delay-2">
+            <h2 class="text-2xl font-bold text-white mb-6 flex items-center gap-2 border-b border-white/5 pb-4">
+                <span class="text-3xl">🧱</span>
+                なぜ Legoモード を使うのか？
+            </h2>
+            <div class="space-y-4 text-slate-300">
+                <p>
+                    ACE-Step 1.5には複数のモードがありますが、<strong>「インスト原曲にボーカルだけを乗せたい」</strong>場合に最適なのが <strong class="text-violet-400">Legoモード</strong> です。
+                </p>
+                <div class="grid md:grid-cols-2 gap-4 mt-6">
+                    <div class="bg-slate-800/50 p-4 rounded-xl border border-slate-700">
+                        <h3 class="font-bold text-violet-300 mb-2">✅ Legoモードの特徴</h3>
+                        <ul class="text-sm space-y-2 list-disc pl-4">
+                            <li>指定したトラック（例：ボーカル）だけを指定範囲に描画・追加する。</li>
+                            <li>BGMのメロディやコード進行、リズムを<strong>崩さずに維持</strong>しやすい。</li>
+                            <li>歌声の質やスタイルがプロンプトと歌詞から正確に反映される。</li>
+                        </ul>
+                    </div>
+                    <div class="bg-slate-800/50 p-4 rounded-xl border border-slate-700">
+                        <h3 class="font-bold text-slate-400 mb-2">❌ Cover/Repaintモードとの違い</h3>
+                        <ul class="text-sm space-y-2 list-disc pl-4">
+                            <li><strong>Coverモード:</strong> 曲全体を作り直す性質が強いため、元のBGMの構成が大きく変わってしまう。</li>
+                            <li><strong>Repaintモード:</strong> 特定の時間を切り取って新しく塗り直すため、既存のBGM成分が消えてしまうことがある。</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Workflow Diagram -->
+        <section class="glass-panel p-8 slide-up delay-3 pulse-border">
+            <h2 class="text-2xl font-bold text-white mb-6 flex items-center gap-2">
+                <span class="w-8 h-8 rounded-full bg-violet-500/20 text-violet-400 flex items-center justify-center text-sm">🔄</span>
+                ボーカル追加のワークフロー
+            </h2>
+            <div class="bg-slate-900/50 p-4 rounded-xl border border-slate-700 overflow-x-auto">
+                <div class="mermaid">
+                    sequenceDiagram
+                        participant User as ユーザー
+                        participant UI as Suno Architect UI
+                        participant Engine as ACE-Step Engine
+                        
+                        User->>UI: 1. モデルを「Base」に設定
+                        Note right of UI: TurboはLegoモード非対応
+                        User->>UI: 2. モードを「LEGO」に変更
+                        User->>UI: 3. インスト原曲(BGM)をアップロード
+                        User->>UI: 4. トラックで「Vocals」を選択
+                        User->>UI: 5. 歌詞(Lyrics)と曲調(Prompt)を入力
+                        User->>UI: 6. Cover Strength を 0.8 に設定
+                        Note right of UI: 0.8付近が原曲維持の推奨値
+                        User->>UI: Generateボタン押下
+                        UI->>Engine: 音源とパラメータを送信
+                        Engine-->>UI: ボーカルが合成された音源を返却
+                        UI->>User: ダウンロード / プレビュー提供
+                </div>
+            </div>
+            
+            <div class="mt-6 p-4 bg-violet-500/10 rounded-lg border border-violet-500/20">
+                <h4 class="text-violet-300 font-bold mb-2 flex items-center gap-2">
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    成功するためのTip
+                </h4>
+                <p class="text-sm text-slate-300">
+                    歌詞のタイミングを合わせたい場合は、歌詞欄に <strong>[Verse 1]</strong> や <strong>[Chorus]</strong> メタタグを使って構成を明確にします。また、<strong class="text-violet-400">Cover Strength は 0.7〜0.9</strong> に設定することで、元のインストゥルメンタルへの忠実度を保ちつつボーカルを乗せることができます。
+                </p>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="border-t border-white/5 py-8 mt-12 text-center text-slate-500 text-sm">
+        <p>Suno Architect Suite - ACE-Step Module | AI-Integrated Music System</p>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SunoArchitect - Vocal Studio 実装解説</title>
+    <!-- Tailwind CSS (CDN) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Mermaid.js -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.4.0/dist/mermaid.min.js"></script>
+    <script>
+        mermaid.initialize({ startOnLoad: true, theme: 'dark' });
+    </script>
+    <style>
+        body {
+            background-color: #0f172a;
+            color: #e2e8f0;
+            font-family: 'Inter', sans-serif;
+            overflow-x: hidden;
+        }
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        /* Reveal Animations */
+        .reveal {
+            opacity: 0;
+            transform: translateY(30px);
+            transition: all 0.8s ease-out;
+        }
+        .reveal.active {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        /* Floating logic elements */
+        .float-fast { animation: float 3s ease-in-out infinite; }
+        .float-slow { animation: float 5s ease-in-out infinite reverse; }
+        @keyframes float {
+            0% { transform: translateY(0px) rotate(0deg); }
+            50% { transform: translateY(-10px) rotate(2deg); }
+            100% { transform: translateY(0px) rotate(0deg); }
+        }
+        
+        .pulse-ring {
+            animation: pulse-ring 2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+        }
+        @keyframes pulse-ring {
+            0% { transform: scale(0.8); opacity: 0.5; }
+            100% { transform: scale(3); opacity: 0; }
+        }
+    </style>
+</head>
+<body class="antialiased min-h-screen pb-20">
+
+    <!-- Hero Section -->
+    <header class="relative pt-24 pb-16 overflow-hidden">
+        <div class="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-900/40 via-slate-900/80 to-slate-950"></div>
+        
+        <div class="relative z-10 max-w-5xl mx-auto px-6 text-center reveal active">
+            <div class="inline-flex items-center justify-center p-3 bg-fuchsia-500/10 rounded-2xl mb-6 border border-fuchsia-500/30 float-fast">
+                <svg class="w-8 h-8 text-fuchsia-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+                </svg>
+            </div>
+            <h1 class="text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-fuchsia-400 via-indigo-400 to-cyan-400 tracking-tight mb-6 text-center">
+                Vocal Studio 実装解説 (Phase 1, 2 & 3)
+            </h1>
+            <p class="text-xl text-slate-400 max-w-2xl mx-auto leading-relaxed text-center">
+                既存のインスト音楽にAIでボーカルを追加するための分離〜MIDI抽出〜歌声合成〜ミックスまでを一貫して行う自動パイプラインの実装ドキュメントです。
+            </p>
+        </div>
+    </header>
+
+    <main class="max-w-5xl mx-auto px-6 space-y-24">
+        
+        <!-- Section: Overview -->
+        <section class="reveal">
+            <h2 class="text-2xl font-bold mb-6 flex items-center gap-2 text-white">
+                <span class="bg-indigo-500/20 text-indigo-400 p-2 rounded-lg"><svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg></span>
+                実装サマリー
+            </h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="glass-panel p-6 rounded-2xl border-fuchsia-500/20">
+                    <h3 class="text-lg font-semibold text-fuchsia-300 mb-3">UI/UX (VocalStudioTab.tsx)</h3>
+                    <ul class="space-y-3 text-sm text-slate-400">
+                        <li class="flex items-start gap-2"><span class="text-green-400">✓</span> <b>非同期ポーリング設計</b>: 長時間のAI処理を通信タイムアウトなく完了。</li>
+                        <li class="flex items-start gap-2"><span class="text-green-400">✓</span> <b>インストパート選択</b>: 抽出元の主旋律楽器を自在に指定可能。</li>
+                    </ul>
+                </div>
+                <div class="glass-panel p-6 rounded-2xl border-indigo-500/20">
+                    <h3 class="text-lg font-semibold text-indigo-300 mb-3">AI解析 (svs_service.py)</h3>
+                    <ul class="space-y-3 text-sm text-slate-400">
+                        <li class="flex items-start gap-2"><span class="text-green-400">✓</span> <b>Demucs & Basic-Pitch</b>: 音源分離からMIDI化までの高精度自動変換。</li>
+                        <li class="flex items-start gap-2"><span class="text-green-400">✓</span> <b>MIDI歌詞マッピング</b>: 音符へのシラブル割当アルゴリズムを実装。</li>
+                    </ul>
+                </div>
+                <div class="glass-panel p-6 rounded-2xl border-cyan-500/20">
+                    <h3 class="text-lg font-semibold text-cyan-300 mb-3">合成・統合 (Mixing Engine)</h3>
+                    <ul class="space-y-3 text-sm text-slate-400">
+                        <li class="flex items-start gap-2"><span class="text-green-400">✓</span> <b>SVS外部連携 & Fallback</b>: DiffSinger等との接続口と、検証用シンセを搭載。</li>
+                        <li class="flex items-start gap-2"><span class="text-green-400">✓</span> <b>Pydub自動ミックス</b>: 生成ボーカルとインストの合成出力を自動化。</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section: Architecture Diagram -->
+        <section class="reveal">
+            <h2 class="text-2xl font-bold mb-6 flex items-center gap-2 text-white">
+                <span class="bg-fuchsia-500/20 text-fuchsia-400 p-2 rounded-lg"><svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"/></svg></span>
+                エンドツーエンド・ワークフロー
+            </h2>
+            <div class="glass-panel p-8 rounded-2xl overflow-x-auto border border-indigo-500/20">
+                <div class="mermaid relative z-10">
+                    sequenceDiagram
+                        autonumber
+                        participant U as User (UI)
+                        participant B as Backend (svs_service)
+                        participant AI as Audio AI (Demucs/BasicPitch)
+                        participant SVS as Synthesis Engine
+                        participant MIX as Mixing (Pydub)
+
+                        U->>B: POST /svs/generate (インスト + 歌詞)
+                        B-->>U: task_id 返却 (即時)
+                        loop 状態確認 (Polling)
+                            U->>B: GET /svs/status/{task_id}
+                            B-->>U: 現在のステータス & 進捗(%)
+                        end
+                        Note over B,AI: [Processing] ステム分離 & MIDI抽出
+                        Note over B,SVS: [Vocal Synthesis] MIDI+歌詞で歌声生成
+                        Note over B,MIX: [Mixing] ボーカル + インスト合成
+                        B-->>U: 生成完了 (MIDI URL, Vocal URL, Mix URL)
+                </div>
+            </div>
+        </section>
+
+        <!-- Section: Features -->
+        <section class="reveal">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-12">
+                <div>
+                    <h2 class="text-2xl font-bold mb-6 text-white border-l-4 border-indigo-500 pl-4">現在のステータス</h2>
+                    <div class="space-y-4">
+                        <div class="p-4 bg-slate-800/50 rounded-xl border border-white/5">
+                            <h4 class="font-bold text-indigo-400 mb-2">1. 音源・MIDI処理</h4>
+                            <p class="text-sm text-slate-400">Demucsによる分離とBasic-PitchによるMIDI化は完全に機能しています。主旋律の抽出精度は楽器選択によって最適化されます。</p>
+                        </div>
+                        <div class="p-4 bg-slate-800/50 rounded-xl border border-white/5">
+                            <h4 class="font-bold text-fuchsia-400 mb-2">2. 歌声合成 (SVS)</h4>
+                            <p class="text-sm text-slate-400">MIDIノートへの歌詞マッピング処理が実装されました。現在は検証用のシンセ（サイン波）によるメロディ確認が可能で、`svs_service.py` にDiffSinger等のCLIエンジンを接続する拡張ポイントを用意しています。</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex flex-col justify-center">
+                    <div class="p-8 bg-gradient-to-br from-indigo-500/10 to-purple-500/10 rounded-3xl border border-white/10 text-center relative overflow-hidden group">
+                        <div class="absolute inset-0 bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none"></div>
+                        <h3 class="text-xl font-bold text-white mb-4">すぐに試す</h3>
+                        <p class="text-slate-400 mb-6 text-sm">作成した `run_vocal_studio.bat` を実行すると、バックエンドとフロントエンドが自動起動します。</p>
+                        <code class="block bg-black/40 p-3 rounded-lg text-fuchsia-400 font-mono text-xs mb-6 text-center">./run_vocal_studio.bat</code>
+                        <div class="flex justify-center gap-4">
+                            <span class="px-3 py-1 bg-green-500/20 text-green-400 text-[10px] rounded-full border border-green-500/30">Frontend: OK</span>
+                            <span class="px-3 py-1 bg-indigo-500/20 text-indigo-400 text-[10px] rounded-full border border-indigo-500/30">Backend: OK</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+    </main>
+
+    <!-- Scroll Reveal Script -->
+    <script>
+        function reveal() {
+            var reveals = document.querySelectorAll(".reveal");
+            for (var i = 0; i < reveals.length; i++) {
+                var windowHeight = window.innerHeight;
+                var elementTop = reveals[i].getBoundingClientRect().top;
+                var elementVisible = 100;
+                if (elementTop < windowHeight - elementVisible) {
+                    reveals[i].classList.add("active");
+                }
+            }
+        }
+        window.addEventListener("scroll", reveal);
+        reveal(); // Trigger on load
+    </script>
+</body>
+</html>

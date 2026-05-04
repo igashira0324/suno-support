@@ -70,3 +70,8 @@ audio-separator/
 # Temporary files
 ytdlp_out.txt
 tsc_error.log
+
+# Local temp and archives
+tmp/
+scratch/
+archive/
