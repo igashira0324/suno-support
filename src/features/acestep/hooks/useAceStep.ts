@@ -302,7 +302,7 @@ export const useAceStep = () => {
                             ...prev,
                             status: 'ready',
                             progress: 100,
-                            instrumentalUrl: toApiUrl(statusData.result?.vocals_url?.replace('vocals.wav', 'instrumental.wav')), // Fallback if backend doesn't provide full URL
+                            instrumentalUrl: toApiUrl(statusData.result?.vocals_url?.replace('vocals.mp3', 'instrumental.mp3')), // Fallback if backend doesn't provide full URL
                             vocalsUrl: toApiUrl(statusData.result?.vocals_url)
                         }));
                         // Fix for instrumental URL if not explicitly returned

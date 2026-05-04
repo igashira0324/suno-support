@@ -174,7 +174,7 @@ export const VoiceChangeDialog: React.FC<VoiceChangeDialogProps> = ({ voiceChang
                                 </div>
                                 <audio src={voiceChange.mergedUrl!} controls className="w-full h-12 accent-indigo-500" autoPlay />
                                 <button
-                                    onClick={() => onDownload(voiceChange.mergedUrl!, `${voiceChange.songTitle || 'track'}_converted.wav`)}
+                                    onClick={() => onDownload(voiceChange.mergedUrl!, `${voiceChange.songTitle || 'track'}_converted.mp3`)}
                                     className="w-full py-3 rounded-xl bg-white text-slate-900 font-bold uppercase tracking-widest hover:bg-indigo-50 transition-all"
                                 >
                                     Download Result
