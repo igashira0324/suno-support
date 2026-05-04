@@ -47,6 +47,8 @@ async def generate_suno_prompt(request: PromptRequest):
             options=request.options,
             theme=request.theme
         )
+        if isinstance(result, dict) and result.get("error"):
+            raise HTTPException(status_code=500, detail=result.get("error"))
         return result
     except Exception as e:
         logger.error(f"Gemini generation failed: {e}")

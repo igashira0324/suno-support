@@ -44,11 +44,35 @@ const App: React.FC = () => {
                 state.youtubeUrl,
                 state.mediaFile,
                 state.generationMode,
-                { searchEngine: state.searchEngine, modelName: state.modelName, enableVideoAnalysis: state.enableVideoAnalysis, lyricsLanguage: state.lyricsLanguage }
+                {
+                    searchEngine: state.searchEngine,
+                    modelName: state.modelName,
+                    enableVideoAnalysis: state.enableVideoAnalysis,
+                    lyricsLanguage: state.lyricsLanguage
+                }
             );
+
+            if ((result as any).error) {
+                throw new Error((result as any).error);
+            }
+
+            if (
+                !result ||
+                typeof result.analysis !== 'string' ||
+                !Array.isArray(result.titleCandidates) ||
+                !Array.isArray(result.styleCandidates)
+            ) {
+                console.error('Invalid Gemini response:', result);
+                throw new Error('Geminiの応答形式が不正です。もう一度お試しください。');
+            }
+
             // Phase 1: Clear bestSelection/alternativeSelection to show title selection UI
             const phase1Result = {
                 ...result,
+                titleCandidates: result.titleCandidates ?? [],
+                styleCandidates: result.styleCandidates ?? [],
+                generatedSelections: result.generatedSelections ?? [],
+                generatedTitles: result.generatedTitles ?? [],
                 bestSelection: { title: '', style: '', instrumental: false, content: '', comment: '' },
                 alternativeSelection: { title: '', style: '', instrumental: false, content: '', comment: '' },
             };

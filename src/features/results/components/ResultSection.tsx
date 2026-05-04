@@ -27,12 +27,12 @@ const ResultSection: React.FC<ResultSectionProps> = ({
             {/* Candidates Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <TitleCandidatesPanel
-                    titles={data.titleCandidates}
-                    generatedTitles={data.generatedTitles}
+                    titles={Array.isArray(data.titleCandidates) ? data.titleCandidates : []}
+                    generatedTitles={Array.isArray(data.generatedTitles) ? data.generatedTitles : []}
                     onTitleSelect={onTitleSelect}
                     isGeneratingPhase2={isGeneratingPhase2}
                 />
-                <StyleCandidatesPanel styles={data.styleCandidates} />
+                <StyleCandidatesPanel styles={Array.isArray(data.styleCandidates) ? data.styleCandidates : []} />
             </div>
 
             {/* Generated Selections */}
