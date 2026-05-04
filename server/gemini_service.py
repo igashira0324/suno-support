@@ -489,9 +489,9 @@ async def generate_style_from_lyrics(
     return response.text.strip()
 
 async def llm_proxy(body: Dict[str, Any]) -> Dict[str, Any]:
-    \"\"\"
+    """
     Proxies LLM requests to Gemini.
-    \"\"\"
+    """
     ensure_gemini_configured()
     model_name = normalize_model_name(body.get("model"))
     messages = body.get("messages", [])
