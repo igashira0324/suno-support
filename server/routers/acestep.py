@@ -124,39 +124,120 @@ def run_separation_task(task_id: str, input_path: Path):
         output_dir = SEPARATION_DIR / task_id
         output_dir.mkdir(parents=True, exist_ok=True)
         
+        logger.info(f"Starting separation task {task_id} for {input_path}")
         separator = Separator(output_dir=str(output_dir), output_format="wav")
         tasks[task_id]["progress"] = 15
         
         if tasks[task_id].get("status") == "cancelled": return
         
-        separator.load_model(model_filename="htdemucs_ft.yaml")
+        # Using htdemucs_ft as default for high quality 4-stem
+        model_name = "htdemucs_ft.yaml"
+        separator.load_model(model_filename=model_name)
         tasks[task_id]["progress"] = 25
         
         output_files = separator.separate(str(input_path))
+        logger.info(f"Separation completed. Output files: {output_files}")
         
         vocals_path = output_dir / "vocals.wav"
         inst_path = output_dir / "instrumental.wav"
         
+        found_vocals = None
+        found_inst = None
+        other_stems = []
+        
         for fname in output_files:
             fpath = output_dir / fname
             if "Vocals" in fname:
-                if vocals_path.exists(): vocals_path.unlink()
-                fpath.rename(vocals_path)
+                found_vocals = fpath
             elif "Instrumental" in fname:
-                if inst_path.exists(): inst_path.unlink()
-                fpath.rename(inst_path)
+                found_inst = fpath
+            else:
+                # Keep track of other stems (Drums, Bass, Other) for potential mixing
+                other_stems.append(fpath)
+        
+        # 1. Process Vocals
+        if found_vocals:
+            if vocals_path.exists(): vocals_path.unlink()
+            found_vocals.rename(vocals_path)
+            logger.info(f"Saved vocals to {vocals_path}")
+        else:
+            logger.warning("No vocals found in separation output!")
+            
+        # 2. Process Instrumental
+        if found_inst:
+            if inst_path.exists(): inst_path.unlink()
+            found_inst.rename(inst_path)
+            logger.info(f"Saved instrumental to {inst_path}")
+        elif other_stems:
+            # If no direct instrumental, mix all other stems
+            logger.info(f"No direct instrumental found. Mixing {len(other_stems)} stems: {[s.name for s in other_stems]}")
+            mixed_audio = None
+            target_sr = None
+            
+            for stem_path in other_stems:
+                try:
+                    # Load audio (preserve sr and channels)
+                    y, sr = librosa.load(str(stem_path), sr=None, mono=False)
+                    
+                    # Normalize to (channels, samples)
+                    if y.ndim == 1:
+                        y = y[np.newaxis, :]
+                    
+                    if mixed_audio is None:
+                        mixed_audio = y
+                        target_sr = sr
+                    else:
+                        # Match sample rate if necessary
+                        if sr != target_sr:
+                            y = librosa.resample(y, orig_sr=sr, target_sr=target_sr)
+                        
+                        # Match channels if necessary
+                        if mixed_audio.shape[0] != y.shape[0]:
+                            if mixed_audio.shape[0] == 1: # mixed is mono, y is stereo
+                                mixed_audio = np.repeat(mixed_audio, y.shape[0], axis=0)
+                            elif y.shape[0] == 1: # y is mono, mixed is stereo
+                                y = np.repeat(y, mixed_audio.shape[0], axis=0)
+                        
+                        # Match length
+                        min_len = min(mixed_audio.shape[1], y.shape[1])
+                        mixed_audio = mixed_audio[:, :min_len] + y[:, :min_len]
+                        
+                except Exception as mix_err:
+                    logger.error(f"Failed to mix stem {stem_path.name}: {mix_err}")
+            
+            if mixed_audio is not None:
+                # soundfile expects (samples, channels)
+                sf.write(str(inst_path), mixed_audio.T, target_sr)
+                logger.info(f"Created combined instrumental at {inst_path}")
+        
+        # Final validation
+        if not vocals_path.exists() and not inst_path.exists():
+            raise Exception("Separation failed: Neither vocals nor instrumental files were created.")
+        
+        if not vocals_path.exists():
+            logger.warning(f"Vocals file missing at {vocals_path}")
+        
+        if not inst_path.exists():
+            logger.error(f"Instrumental file missing at {inst_path}")
         
         tasks[task_id]["result"] = {
-            "vocals_url": f"/outputs/separated/{task_id}/vocals.wav",
-            "instrumental_url": f"/outputs/separated/{task_id}/instrumental.wav",
+
+            "vocals_url": f"/outputs/separated/{task_id}/vocals.wav" if vocals_path.exists() else None,
+            "instrumental_url": f"/outputs/separated/{task_id}/instrumental.wav" if inst_path.exists() else None,
             "original_path": to_web_path(input_path)
         }
         tasks[task_id]["status"] = "completed"
         tasks[task_id]["progress"] = 100
+        logger.info(f"Separation task {task_id} finished successfully.")
+        
     except Exception as e:
-        logger.error(f"Separation failed: {e}")
+        logger.error(f"Separation failed for {task_id}: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         tasks[task_id]["status"] = "failed"
         tasks[task_id]["error"] = str(e)
+
+
 
 def run_voice_conversion_task(
     task_id: str, 
@@ -277,8 +358,9 @@ def normalize_acestep_audio_url(raw_url: str) -> str:
     raw_url = str(raw_url).strip()
     base_url = getattr(settings, "acestep_api_url", "http://127.0.0.1:8101").rstrip("/")
 
-    if raw_url.startswith(("http://", "https://")):
+    if raw_url.startswith(("http://", "https://", "/outputs/", "/uploads/")):
         return raw_url
+
 
     if raw_url.startswith("/v1/audio"):
         return f"{base_url}{raw_url}"
@@ -341,25 +423,22 @@ async def get_acestep_status(task_id: str):
     if not result:
         # Check local task store fallback
         if task_id in tasks:
-            task = tasks[task_id]
-            return {
-                "task_id": task_id,
-                "status": task.get("status", "processing"),
-                "progress": task.get("progress", 0),
-                "output_files": task.get("output_files", []),
-                "result": task.get("result"),
-                "error": task.get("error"),
-            }
-        raise HTTPException(status_code=404, detail="Task not found")
+            result = tasks[task_id]
+        else:
+            raise HTTPException(status_code=404, detail="Task not found")
     
-    # Map status from external service
+    # Map status from external service (raw_status is int) or local (status is str)
     raw_status = result.get("status")
-    if raw_status == 1:
-        status = "completed"
-    elif raw_status in [-1, 2]:
-        status = "failed"
+    if isinstance(raw_status, int):
+        if raw_status == 1:
+            status = "completed"
+        elif raw_status in [-1, 2]:
+            status = "failed"
+        else:
+            status = "processing"
     else:
-        status = "processing"
+        status = raw_status or "processing"
+
     
     # Normalize output files for frontend
     output_files = []
@@ -404,7 +483,22 @@ async def get_acestep_status(task_id: str):
                     "label": "Merged Output"
                 })
 
+            elif "vocals_url" in res_data:
+                # Separation task result
+                output_files.append({
+                    "url": normalize_acestep_audio_url(res_data["vocals_url"]),
+                    "label": "Vocals",
+                    "type": "vocals"
+                })
+                if "instrumental_url" in res_data:
+                    output_files.append({
+                        "url": normalize_acestep_audio_url(res_data["instrumental_url"]),
+                        "label": "Instrumental",
+                        "type": "instrumental"
+                    })
+
             else:
+
                 # Single dict output case
                 files = [res_data]
 
