@@ -104,13 +104,45 @@ graph TB
     E <--> I
 ```
 
+## 🔧 セットアップ方法
+
+### 1. リポジトリのクローンと移動
+```bash
+git clone https://github.com/igashira0324/suno-support.git
+cd suno-support
+```
+
+### 2. 環境変数の設定
+`.env.example` をコピーして `.env` を作成し、Gemini APIキー等の設定を入力します。
+```bash
+cp .env.example .env
+# .env を編集して GEMINI_API_KEY を設定
+```
+
+### 3. バックエンド (Python) のインストール
+`server/requirements.txt` にリストされている Python 依存関係をインストールします。
+```bash
+cd server
+python3 -m venv venv
+source venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+cd ..
+```
+
+### 4. フロントエンド (Node.js) のインストール
+Node.js (v18+) 環境で必要なパッケージをインストールします。
+```bash
+npm install
+```
+
 ---
 
 ## 🚀 起動方法
 
 ### 1. Linux 一括起動 (推奨)
 ```bash
-cd /home/nttdmse/aipf/music
+cd /home/nttdmse/aipf/ace-step-music
 ./run_local.sh
 ```
 
@@ -124,7 +156,7 @@ cd /home/nttdmse/aipf/music
 停止:
 
 ```bash
-cd /home/nttdmse/aipf/music
+cd /home/nttdmse/aipf/ace-step-music
 ./stop_local.sh
 ```
 
@@ -134,33 +166,33 @@ cd /home/nttdmse/aipf/music
 社内LAN用プロキシと、Wi-Fiルーター直結時のプロキシなし設定を切り替えられます。
 
 ```bash
-cd /home/nttdmse/aipf/music
+cd /home/nttdmse/aipf/ace-step-music
 ./switch_proxy_mode.sh corporate
 ```
 
 ```bash
-cd /home/nttdmse/aipf/music
+cd /home/nttdmse/aipf/ace-step-music
 ./switch_proxy_mode.sh wifi
 ```
 
 現在の状態確認:
 
 ```bash
-cd /home/nttdmse/aipf/music
+cd /home/nttdmse/aipf/ace-step-music
 ./switch_proxy_mode.sh status
 ```
 
 ネット疎通確認:
 
 ```bash
-cd /home/nttdmse/aipf/music
+cd /home/nttdmse/aipf/ace-step-music
 ./check_network.sh current
 ```
 
 または、切替と確認を一度に行う場合:
 
 ```bash
-cd /home/nttdmse/aipf/music
+cd /home/nttdmse/aipf/ace-step-music
 ./check_network.sh wifi
 ```
 
@@ -168,17 +200,17 @@ cd /home/nttdmse/aipf/music
 
 ### 2. Linux 個別起動
 ```bash
-cd /home/nttdmse/aipf/music
+cd /home/nttdmse/aipf/ace-step-music
 ./run_acestep.sh
 ```
 
 ```bash
-cd /home/nttdmse/aipf/music
+cd /home/nttdmse/aipf/ace-step-music
 ./run_backend.sh
 ```
 
 ```bash
-cd /home/nttdmse/aipf/music
+cd /home/nttdmse/aipf/ace-step-music
 ./run_frontend.sh
 ```
 
@@ -189,7 +221,8 @@ cd /home/nttdmse/aipf/music
 
 ## ⚙️ 環境変数
 
-ルートの `.env` に設定します。
+ルートの `.env` に設定します。  
+動作要件やトラブルシューティングの詳細は [docs/requirements.md](docs/requirements.md) を参照してください。
 
 - **必須**: `GEMINI_API_KEY`
 - **任意**: `GOOGLE_CUSTOM_SEARCH_API_KEY`
