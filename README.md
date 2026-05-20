@@ -26,7 +26,7 @@ Gemini などの最新AIモデルを活用し、プロンプト生成から歌�
 ## ✨ 主な機能
 
 ### 1. Advanced Prompt Generation
-*   **Dual-Brain Intelligence**: Gemini 2.5 Flash Lite (Default) / 2.0 Flash / 3.1 Pro 等を切り替え可能。
+*   **Dual-Brain Intelligence**: Gemini 3.5 Flash (Default) / 2.5 Flash / 2.0 Flash 等を切り替え可能。
 *   **Image-to-Prompt (New!)**: 参考画像から、音楽スタイルや雰囲気を読み取り、最適なプロンプトを生成。
 *   **Search Engine Grounding**: Google Custom Search, Tavily AI を活用し、最新トレンドやアーティスト情報をプロンプトに反映。
 *   **Suno URL Analysis**: `/s/` 短縮URLを含むSuno楽曲からメタデータを抽出し、そのスタイルを継承した新曲作成を支援。
@@ -56,13 +56,13 @@ Suno AI 級の高品質な音楽生成を、**完全ローカル環境**で実�
     - **Thinking Mode Guidance**: 5Hz LMによる音楽設計プロトコルの詳細ヘルプを追加。
     - **Auto-Prompting**: Coverモード切り替え時に「Faithful cover, original melody...」を自動セット。
 
-### 3. YuE: Advanced Generation (New Tab!)
+### 4. YuE: Advanced Generation (New Tab!)
 最先端の音楽生成モデル「YuE」による、より細かな制御が可能な生成モード。
 *   **Quality Profiles**: Best (8.0bpw) / Balanced / Fast 等、VRAM量に合わせた品質選択。
 *   **Language Optimization**: 日本語 (jp-kr-cot) と英語 (en-cot) 各言語に最適化されたCoT（思考の連鎖）生成に対応。
 *   **Structural Control**: セグメント数 (1〜4+) を指定し、30秒から2分以上のフル楽曲まで柔軟に作成。
 
-### 4. MV Production Support (Pro Suite)
+### 5. MV Production Support (Pro Suite)
 MV制作を加速させる、高度なオーディオ編集・解析ツール群。
 *   **Universal URL Import (New!)**: YouTube (Shorts含む), TikTok, Suno.ai, SoundCloud 等のURLから直接オーディオを抽出・分離。
 *   **Audio Separator (HQ)**: BS-RoFormer & MDX-Net 23C を使用し、ボーカルと伴奏を極限までクリーンに分離。
@@ -142,7 +142,7 @@ npm install
 
 ### 1. Linux 一括起動 (推奨)
 ```bash
-cd /home/nttdmse/aipf/ace-step-music
+cd suno-support
 ./run_local.sh
 ```
 
@@ -156,7 +156,7 @@ cd /home/nttdmse/aipf/ace-step-music
 停止:
 
 ```bash
-cd /home/nttdmse/aipf/ace-step-music
+cd suno-support
 ./stop_local.sh
 ```
 
@@ -166,33 +166,33 @@ cd /home/nttdmse/aipf/ace-step-music
 社内LAN用プロキシと、Wi-Fiルーター直結時のプロキシなし設定を切り替えられます。
 
 ```bash
-cd /home/nttdmse/aipf/ace-step-music
+cd suno-support
 ./switch_proxy_mode.sh corporate
 ```
 
 ```bash
-cd /home/nttdmse/aipf/ace-step-music
+cd suno-support
 ./switch_proxy_mode.sh wifi
 ```
 
 現在の状態確認:
 
 ```bash
-cd /home/nttdmse/aipf/ace-step-music
+cd suno-support
 ./switch_proxy_mode.sh status
 ```
 
 ネット疎通確認:
 
 ```bash
-cd /home/nttdmse/aipf/ace-step-music
+cd suno-support
 ./check_network.sh current
 ```
 
 または、切替と確認を一度に行う場合:
 
 ```bash
-cd /home/nttdmse/aipf/ace-step-music
+cd suno-support
 ./check_network.sh wifi
 ```
 
@@ -200,17 +200,17 @@ cd /home/nttdmse/aipf/ace-step-music
 
 ### 2. Linux 個別起動
 ```bash
-cd /home/nttdmse/aipf/ace-step-music
+cd suno-support
 ./run_acestep.sh
 ```
 
 ```bash
-cd /home/nttdmse/aipf/ace-step-music
+cd suno-support
 ./run_backend.sh
 ```
 
 ```bash
-cd /home/nttdmse/aipf/ace-step-music
+cd suno-support
 ./run_frontend.sh
 ```
 
@@ -242,8 +242,6 @@ cd /home/nttdmse/aipf/ace-step-music
 | **Music (Local)** | `acestep-v15-xl-sft / xl-base` | 既定はXL最高品質、Lego/カバーはXL Base対応 |
 | **Custom Music** | `YuE (Best/Balanced/Fast)` | 専門的な音源生成 |
 | **Analysis** | `CLAP`, `Whisper`, `RoFormer` | 音源解析・分離用 |
-
----
 
 ---
 

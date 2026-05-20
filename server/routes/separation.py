@@ -9,14 +9,13 @@ import asyncio
 from pathlib import Path
 from core.paths import resolve_web_path
 from core.audio_utils import transcode_to_mp3
-from urllib.parse import unquote
 
 from fastapi import APIRouter, UploadFile, File, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 
 from core.config import (
     tasks, logger,
-    PROJECT_DIR, UPLOAD_DIR, SEPARATION_DIR, MERGED_DIR,
+    UPLOAD_DIR, SEPARATION_DIR, MERGED_DIR,
 )
 from core.download import download_audio_from_url
 

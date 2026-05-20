@@ -87,3 +87,8 @@ server/venv/
 # Personal notes & archived reports
 docs/memo.txt
 docs/archive/
+
+# Backup / restore files
+*.restored
+*.backup
+*.orig
