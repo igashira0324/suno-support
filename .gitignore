@@ -15,6 +15,7 @@ venv.bak/
 .env
 .env.local
 .env.*.local
+proxy_profiles/
 
 # Build outputs
 dist/
@@ -67,11 +68,22 @@ audio-separator/
 .agent/
 .gemini/
 
+# Runtime state & logs
+.logs/
+.run/
+
+# Scratch / temp workspace
+scratch/
+
 # Temporary files
 ytdlp_out.txt
 tsc_error.log
+npm_install.log
 
-# Local temp and archives
-tmp/
-scratch/
-archive/
+# Python virtual envs (nested)
+.venv/
+server/venv/
+
+# Personal notes & archived reports
+docs/memo.txt
+docs/archive/

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import WaveSurfer from 'wavesurfer.js';
 import { Play, Pause, Download, Volume2, VolumeX } from 'lucide-react';
-import { toApiUrl } from '../api/client';
+import { API_BASE_URL } from '@/config/api';
 
 interface WaveformPlayerProps {
     src: string;
@@ -89,7 +89,7 @@ const WaveformPlayer: React.FC<WaveformPlayerProps> = ({ src, title, subtitle, t
         setIsSaving(true);
         try {
             // Determine if src is a full URL or relative
-            const apiUrl = toApiUrl("/save_file");
+            const apiUrl = `${API_BASE_URL}/save_file`; // Configured port
 
             const response = await fetch(apiUrl, {
                 method: "POST",

@@ -1,16 +1,34 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { SunoResponse, AppState, MediaType, GenerationMode } from './types';
 import { generateSunoPrompt } from './services/geminiService';
-import InputSection from './features/input/components/InputSection';
-import ResultSection from './features/results/components/ResultSection';
+import { API_BASE_URL } from '@/config/api';
+import InputSection from './components/InputSection';
+import ResultSection from './components/ResultSection';
+import YuEGenerationTab from './components/YuEGenerationTab';
 import AceStepTab from './components/AceStepTab';
 import MvProductionTab from './components/MvProductionTab';
-import VocalStudioTab from './features/vocal-studio/components/VocalStudioTab';
-import { AudioWaveform as Waveform, Sparkles, AlertCircle, Wand2, Music, Settings, Info, Video, AudioLines } from 'lucide-react';
-import { toApiUrl } from './api/client';
+import { AudioWaveform as Waveform, Sparkles, AlertCircle, Wand2, Music, Video } from 'lucide-react';
+
+type PromptLoadingPhase = 'phase1' | 'phase2' | null;
+
+const getProgressFromElapsed = (elapsedMs: number): number => {
+    const elapsed = elapsedMs / 1000;
+
+    if (elapsed < 6) return Math.round(8 + (elapsed / 6) * 20);
+    if (elapsed < 18) return Math.round(28 + ((elapsed - 6) / 12) * 24);
+    if (elapsed < 40) return Math.round(52 + ((elapsed - 18) / 22) * 24);
+    if (elapsed < 65) return Math.round(76 + ((elapsed - 40) / 25) * 14);
+    if (elapsed < 90) return Math.round(90 + ((elapsed - 65) / 25) * 5);
+
+    return 95;
+};
 
 const App: React.FC = () => {
-    const [activeTab, setActiveTab] = useState<'prompt' | 'ace' | 'mv' | 'vocal'>('prompt');
+    const [activeTab, setActiveTab] = useState<'prompt' | 'yue' | 'ace' | 'mv'>('ace');
+    const [promptLoadingPhase, setPromptLoadingPhase] = useState<PromptLoadingPhase>(null);
+    const [promptLoadingProgress, setPromptLoadingProgress] = useState(0);
+    const [promptLoadingElapsed, setPromptLoadingElapsed] = useState(0);
+    const [phase2Title, setPhase2Title] = useState('');
     const [state, setState] = useState<AppState>({
         inputText: '',
         youtubeUrl: '',
@@ -21,10 +39,37 @@ const App: React.FC = () => {
         result: null,
         error: null,
         searchEngine: 'google-grounding',
-        modelName: 'gemini-2.5-flash',
+        modelName: 'gemini-3.5-flash',
         enableVideoAnalysis: false,
         lyricsLanguage: 'Japanese',
     });
+
+    useEffect(() => {
+        if (!promptLoadingPhase) {
+            setPromptLoadingProgress(0);
+            setPromptLoadingElapsed(0);
+            return;
+        }
+
+        const startedAt = Date.now();
+        setPromptLoadingProgress(6);
+        setPromptLoadingElapsed(0);
+
+        const interval = window.setInterval(() => {
+            const elapsedMs = Date.now() - startedAt;
+            setPromptLoadingElapsed(Math.floor(elapsedMs / 1000));
+            setPromptLoadingProgress(getProgressFromElapsed(elapsedMs));
+        }, 400);
+
+        return () => window.clearInterval(interval);
+    }, [promptLoadingPhase]);
+
+    const loadingMessage = useMemo(() => {
+        if (promptLoadingPhase === 'phase2') {
+            return phase2Title ? `「${phase2Title}」を生成中...` : '歌詞・構成を生成中...';
+        }
+        return '分析中...';
+    }, [phase2Title, promptLoadingPhase]);
 
     const handleTextChange = (text: string) => setState(prev => ({ ...prev, inputText: text }));
     const handleUrlChange = (url: string) => setState(prev => ({ ...prev, youtubeUrl: url }));
@@ -37,6 +82,7 @@ const App: React.FC = () => {
 
     const handleSubmit = async () => {
         if (!state.inputText && !state.youtubeUrl && !state.mediaFile) return;
+        setPromptLoadingPhase('phase1');
         setState(prev => ({ ...prev, isLoading: true, error: null, result: null }));
         try {
             const result = await generateSunoPrompt(
@@ -44,39 +90,23 @@ const App: React.FC = () => {
                 state.youtubeUrl,
                 state.mediaFile,
                 state.generationMode,
-                {
-                    searchEngine: state.searchEngine,
-                    modelName: state.modelName,
-                    enableVideoAnalysis: state.enableVideoAnalysis,
-                    lyricsLanguage: state.lyricsLanguage
-                }
+                { searchEngine: state.searchEngine, modelName: state.modelName, enableVideoAnalysis: state.enableVideoAnalysis, lyricsLanguage: state.lyricsLanguage }
             );
-
-            if ((result as any).error) {
-                throw new Error((result as any).error);
-            }
-
-            if (
-                !result ||
-                typeof result.analysis !== 'string'
-            ) {
-                console.error('Invalid Gemini response:', result);
-                throw new Error('Geminiの分析結果が取得できませんでした。もう一度お試しください。');
-            }
-
             // Phase 1: Clear bestSelection/alternativeSelection to show title selection UI
             const phase1Result = {
                 ...result,
-                titleCandidates: result.titleCandidates ?? [],
-                styleCandidates: result.styleCandidates ?? [],
-                generatedSelections: [],
-                generatedTitles: [],
                 bestSelection: { title: '', style: '', instrumental: false, content: '', comment: '' },
                 alternativeSelection: { title: '', style: '', instrumental: false, content: '', comment: '' },
             };
+            setPromptLoadingProgress(100);
             setState(prev => ({ ...prev, isLoading: false, result: phase1Result }));
         } catch (error: any) {
+            setPromptLoadingProgress(100);
             setState(prev => ({ ...prev, isLoading: false, error: error.message || "予期せぬエラーが発生しました。" }));
+        } finally {
+            window.setTimeout(() => {
+                setPromptLoadingPhase(null);
+            }, 400);
         }
     };
 
@@ -88,6 +118,8 @@ const App: React.FC = () => {
         if (state.result.generatedTitles?.includes(selectedTitle)) return;
 
         setIsGeneratingPhase2(true);
+        setPhase2Title(selectedTitle);
+        setPromptLoadingPhase('phase2');
         try {
             const { generateFromSelectedTitle } = await import('./services/geminiService');
             const phase2Result = await generateFromSelectedTitle(
@@ -115,7 +147,12 @@ const App: React.FC = () => {
         } catch (error: any) {
             setState(prev => ({ ...prev, error: error.message || "生成でエラーが発生しました。" }));
         } finally {
+            setPromptLoadingProgress(100);
             setIsGeneratingPhase2(false);
+            window.setTimeout(() => {
+                setPromptLoadingPhase(null);
+                setPhase2Title('');
+            }, 400);
         }
     };
 
@@ -135,7 +172,7 @@ const App: React.FC = () => {
         }));
 
         try {
-            const response = await fetch(toApiUrl('/acestep/minimax/generate'), {
+            const response = await fetch(`${API_BASE_URL}/acestep/minimax/generate`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ lyrics: content, prompt: style })
@@ -152,7 +189,7 @@ const App: React.FC = () => {
             finalSelections[index] = {
                 ...finalSelections[index],
                 isMinimaxGenerating: false,
-                minimaxAudioUrl: toApiUrl(data.audio_url),
+                minimaxAudioUrl: `${API_BASE_URL}${data.audio_url}`,
                 minimaxError: null
             };
 
@@ -203,7 +240,16 @@ const App: React.FC = () => {
                             <Wand2 className="w-4 h-4" />
                             Prompt Gen
                         </button>
-
+                        <button
+                            onClick={() => setActiveTab('yue')}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'yue'
+                                ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/20'
+                                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                                }`}
+                        >
+                            <Music className="w-4 h-4" />
+                            YuE Generate
+                        </button>
                         <button
                             onClick={() => setActiveTab('ace')}
                             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'ace'
@@ -224,20 +270,10 @@ const App: React.FC = () => {
                             <Video className="w-4 h-4" />
                             MV Support
                         </button>
-                        <button
-                            onClick={() => setActiveTab('vocal')}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'vocal'
-                                ? 'bg-fuchsia-600 text-white shadow-lg shadow-fuchsia-500/20'
-                                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                                }`}
-                        >
-                            <AudioLines className="w-4 h-4" />
-                            Vocal Studio
-                        </button>
                     </nav>
 
                     <div className="hidden md:flex items-center gap-4">
-                        <span className="text-[10px] text-slate-500 uppercase tracking-widest font-black bg-slate-900 px-2 py-1 rounded border border-white/5">v4.5 Hybrid</span>
+                        <span className="text-[10px] text-slate-500 uppercase tracking-widest font-black bg-slate-900 px-2 py-1 rounded border border-white/5">v4.7 Hybrid</span>
                     </div>
                 </div>
             </header>
@@ -266,6 +302,8 @@ const App: React.FC = () => {
                         onVideoAnalysisToggle={handleVideoAnalysisToggle}
                         lyricsLanguage={state.lyricsLanguage}
                         onLyricsLanguageChange={handleLyricsLanguageChange}
+                        loadingProgress={promptLoadingProgress}
+                        loadingMessage={loadingMessage}
                     />
 
                     {state.error && (
@@ -281,25 +319,61 @@ const App: React.FC = () => {
                             onTitleSelect={handleTitleSelect}
                             isGeneratingPhase2={isGeneratingPhase2}
                             onMinimaxGenerate={handleMinimaxGenerate}
+                            phase2Progress={promptLoadingPhase === 'phase2' ? promptLoadingProgress : 0}
+                            phase2Message={loadingMessage}
                         />
                     )}
                 </div>
-
+                <div style={{ display: activeTab === 'yue' ? 'block' : 'none' }}>
+                    <YuEGenerationTab />
+                </div>
                 <div style={{ display: activeTab === 'ace' ? 'block' : 'none' }}>
                     <AceStepTab />
                 </div>
                 <div style={{ display: activeTab === 'mv' ? 'block' : 'none' }}>
                     <MvProductionTab />
                 </div>
-                <div style={{ display: activeTab === 'vocal' ? 'block' : 'none' }}>
-                    <VocalStudioTab />
-                </div>
             </main>
+
+            {promptLoadingPhase && (
+                <div className="fixed right-6 bottom-6 z-50 w-[min(420px,calc(100vw-2rem))] rounded-2xl border border-white/10 bg-slate-950/90 backdrop-blur-xl shadow-2xl shadow-black/40">
+                    <div className="p-5">
+                        <div className="flex items-start gap-3 mb-4">
+                            <div className="mt-0.5 h-10 w-10 rounded-full bg-indigo-500/15 border border-indigo-400/20 flex items-center justify-center shrink-0">
+                                <Sparkles className="w-5 h-5 text-indigo-300 animate-pulse" />
+                            </div>
+                            <div className="min-w-0">
+                                <p className="text-white font-semibold">{loadingMessage}</p>
+                                <p className="text-slate-400 text-sm mt-1">
+                                    {promptLoadingPhase === 'phase1'
+                                        ? 'タイトル候補とスタイル候補を解析しています。'
+                                        : '歌詞、構成、説明コメント、MV 用タイムラインをまとめています。'}
+                                </p>
+                            </div>
+                        </div>
+                        <div className="flex items-center justify-between text-xs font-medium text-slate-400 mb-2">
+                            <span>{promptLoadingElapsed}秒経過</span>
+                            <span>{promptLoadingProgress}%</span>
+                        </div>
+                        <div className="h-2.5 rounded-full bg-slate-800 overflow-hidden">
+                            <div
+                                className={`h-full rounded-full transition-all duration-500 ease-out ${promptLoadingPhase === 'phase1'
+                                    ? 'bg-gradient-to-r from-indigo-400 via-sky-400 to-cyan-300'
+                                    : 'bg-gradient-to-r from-pink-400 via-fuchsia-400 to-violet-400'}`}
+                                style={{ width: `${promptLoadingProgress}%` }}
+                            />
+                        </div>
+                        <p className="mt-3 text-[11px] uppercase tracking-[0.18em] text-slate-500">
+                            通常は 40〜90 秒程度です
+                        </p>
+                    </div>
+                </div>
+            )}
 
             {/* Footer */}
             <footer className="border-t border-white/5 py-4 bg-black/20">
                 <div className="max-w-7xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between text-slate-600 text-[10px] uppercase tracking-widest font-bold">
-                    <p className="flex items-center gap-2"><Sparkles className="w-3 h-3" /> Powered by Gemini & ACE-Step</p>
+                    <p className="flex items-center gap-2"><Sparkles className="w-3 h-3" /> Powered by Gemini & YuE-s1</p>
                     <p>© 2026 Suno Architect Suite</p>
                 </div>
             </footer>

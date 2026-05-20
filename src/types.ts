@@ -10,15 +10,11 @@ export enum GenerationMode {
     INSTRUMENTAL = 'INSTRUMENTAL'
 }
 
-export type GeminiModel =
-    | 'gemini-3-flash-preview'
-    | 'gemini-3.1-pro-preview'
-    | 'gemini-2.5-flash'
-    | 'gemini-2.5-pro';
+export type GeminiModel = 'gemini-3.5-flash' | 'gemini-3-flash-preview' | 'gemini-3.1-pro-preview';
 
 export type LyricsLanguage = 'Japanese' | 'English';
 
-export type SearchEngine = 'google-grounding' | 'google-custom' | 'tavily' | 'none';
+export type SearchEngine = 'google-grounding' | 'google-custom' | 'tavily' | 'firecrawl' | 'none';
 
 export interface MVScene {
     scene_number: number;
@@ -124,6 +120,7 @@ export interface AceStepState {
     generatedTitle?: string;
     seed: number;
     task_type: string;
+    coverRepaintUseLm: boolean;
     coverAudioSourceType: 'upload' | 'url';
     coverAudioUrl: string;
     coverAudioFile: File | null;
@@ -147,4 +144,5 @@ export interface AceStepState {
     startTime?: number;
     processingTime?: number;
 }
+
 

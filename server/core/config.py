@@ -1,42 +1,43 @@
+"""
+Shared directory constants, logger setup, and task store.
+All route modules import from here to avoid circular dependencies.
+"""
+
+import logging
 from pathlib import Path
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from typing import Dict
 
-class Settings(BaseSettings):
-    # API Keys
-    gemini_api_key: str | None = None
-    openai_api_key: str | None = None
-    acestep_api_key: str | None = None
-    minimax_api_key: str | None = None
-    google_custom_search_api_key: str | None = None
-    google_custom_search_cx: str | None = None
-    tavily_api_key: str | None = None
+# --- Directories -----------------------------------------------------------
 
-    # Server Settings
-    backend_port: int = 8100
-    frontend_origin: str = "http://localhost:3300"
+SERVER_DIR = Path(__file__).resolve().parent.parent          # server/
+PROJECT_DIR = SERVER_DIR.parent                              # music/
+UPLOAD_DIR = PROJECT_DIR / "uploads"
+OUTPUT_DIR = PROJECT_DIR / "outputs"
+YUE_OUTPUT_DIR = OUTPUT_DIR / "yue_generations"
+SEPARATION_DIR = OUTPUT_DIR / "separated"
+MINIMAX_OUTPUT_DIR = OUTPUT_DIR / "minimax"
+MERGED_DIR = OUTPUT_DIR / "merged"
+ACESTEP_SOURCE_DIR = UPLOAD_DIR / "acestep_source"
+ACESTEP_RUNTIME_SOURCE_DIR = PROJECT_DIR / "ace-step" / "uploads" / "acestep_source"
 
-    # Paths
-    server_dir: Path = Path(__file__).resolve().parents[1]
-    project_dir: Path = server_dir.parent
+# Ensure all required directories exist
+for d in (
+    UPLOAD_DIR, OUTPUT_DIR, YUE_OUTPUT_DIR, SEPARATION_DIR,
+    MINIMAX_OUTPUT_DIR, MERGED_DIR, ACESTEP_SOURCE_DIR,
+    ACESTEP_RUNTIME_SOURCE_DIR,
+):
+    d.mkdir(parents=True, exist_ok=True)
 
-    upload_dir: Path = project_dir / "uploads"
-    output_dir: Path = project_dir / "outputs"
-    
-    # Specific Output Dirs
-    separation_dir: Path = output_dir / "separated"
-    minimax_output_dir: Path = output_dir / "minimax"
+# --- Logger ----------------------------------------------------------------
 
-    model_config = SettingsConfigDict(
-        env_file=str(Path(__file__).resolve().parents[2] / ".env"),
-        env_file_encoding="utf-8",
-        extra="ignore",
-    )
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("SunoArchitect")
 
-    def create_directories(self):
-        """Ensure all required directories exist."""
-        for path in [self.upload_dir, self.output_dir, self.separation_dir, self.minimax_output_dir]:
-            path.mkdir(parents=True, exist_ok=True)
+logger.info(f"SERVER_DIR: {SERVER_DIR}")
+logger.info(f"PROJECT_DIR: {PROJECT_DIR}")
+logger.info(f"UPLOAD_DIR: {UPLOAD_DIR}")
+logger.info(f"OUTPUT_DIR: {OUTPUT_DIR}")
 
-settings = Settings()
-# Initialize directories on import
-settings.create_directories()
+# --- In-memory task store --------------------------------------------------
+
+tasks: Dict[str, dict] = {}
