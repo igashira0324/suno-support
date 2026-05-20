@@ -334,6 +334,9 @@ async def start_voice_conversion(
         return {"status": "success", "task_id": task_id}
     except HTTPException as he:
         raise he
+    except ValueError as ve:
+        logger.warning(f"[voice-convert] Path validation error: {ve}")
+        raise HTTPException(status_code=403, detail=str(ve))
     except Exception as e:
         logger.error(f"[voice-convert] Failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))

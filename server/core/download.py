@@ -1,17 +1,49 @@
-"""
-Audio download helper (yt-dlp / Suno CDN).
-"""
-
+import socket
+import ipaddress
 import re
 import shutil
 import subprocess
 import sys
 import uuid
 from pathlib import Path
+from urllib.parse import urlparse
 
 import requests
 
 from .config import logger
+
+
+def is_safe_url(url: str) -> bool:
+    """Validate that the URL scheme is HTTP/HTTPS and host does not resolve to private/local networks (SSRF prevention)."""
+    try:
+        parsed = urlparse(url)
+        if not parsed.scheme or parsed.scheme.lower() not in ("http", "https"):
+            return False
+        
+        hostname = parsed.hostname
+        if not hostname:
+            return False
+        
+        # Check if raw IP and private
+        try:
+            ip = ipaddress.ip_address(hostname)
+            if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_unspecified:
+                return False
+        except ValueError:
+            pass
+
+        # Resolve hostname to IPs
+        addr_info = socket.getaddrinfo(hostname, None)
+        for family, _, _, _, sockaddr in addr_info:
+            ip_str = sockaddr[0]
+            ip = ipaddress.ip_address(ip_str)
+            if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_unspecified or ip.is_multicast:
+                return False
+                
+        return True
+    except Exception as e:
+        logger.error(f"SSRF validation failed for {url}: {e}")
+        return False
 
 
 async def download_audio_from_url(url: str, output_dir: Path) -> Path:
@@ -20,6 +52,8 @@ async def download_audio_from_url(url: str, output_dir: Path) -> Path:
     Supports YouTube (via yt-dlp) and Suno (direct CDN).
     Returns the Path to the downloaded file.
     """
+    if not is_safe_url(url):
+        raise ValueError(f"URL is not allowed (SSRF Protection): {url}")
     file_id = str(uuid.uuid4())
     temp_dir = output_dir / f"ytdlp_temp_{file_id}"
     temp_dir.mkdir(parents=True, exist_ok=True)

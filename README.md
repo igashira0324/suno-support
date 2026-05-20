@@ -1,9 +1,27 @@
 # Suno Architect Suite (v4.7 Hybrid)
 
-Suno AI (v4.5/v5) のポテンシャルを最大限に引き出すための統合開発環境です。
-Gemini 1.5 Pro / 2.0 Flash / 3.1 Pro などの最新AIモデルを活用し、プロンプト生成から歌詞生成、MV制作支援までをワンストップで行えます。
+SunoのようなAI音楽制作体験を参考にしつつ、**ACE-Stepを中心としたローカル音楽生成・編集ワークフロー**を提供する統合開発環境です。
+Gemini などの最新AIモデルを活用し、プロンプト生成から歌詞生成、MV制作支援までをワンストップで行えます。
+
+> **本プロジェクトについて**  
+> 公式SunoのWebサービス体験を完全に再現するものではありません。現在の主眼は、ローカル生成・プロンプト設計・ボーカル編集・音源解析・MV制作支援を一つの制作環境として統合することです。クラウドサービス規模の生成管理や商用サービスレベルの操作体験は現時点では対象外です。
 
 ---
+
+## 🖥️ Supported Environment
+
+本プロジェクトは主に **Linux + NVIDIA GPU** 環境でテストされています。
+
+| 項目 | 推奨構成 |
+|---|---|
+| OS | Ubuntu 22.04 / Linux (NVIDIA DGX SPARK 等) |
+| GPU | NVIDIA CUDA 対応 GPU (VRAM 16GB 以上推奨) |
+| CPU | ARM64 / x86_64 |
+| Frontend | Node.js 18+ / Vite |
+| Backend | Python 3.10+ / FastAPI |
+| ACE-Step Engine | 別プロセスとして port 8101 で起動 |
+
+> Windows での動作は未保証です。WSL2 経由でのご利用をお試しください。
 
 ## ✨ 主な機能
 
@@ -186,7 +204,7 @@ cd /home/nttdmse/aipf/music
 
 | カテゴリ | モデル名 | 特徴 |
 |---------|---------|------|
-| **LLM (Planning)** | `gemini-2.5-flash` | 高速・高精度な楽曲設計 |
+| **LLM (Planning)** | `gemini-3.5-flash` (**Default**) / `gemini-2.5-flash` / `gemini-2.0-flash` | 高速・高精度な楽曲設計 |
 | **Music (Cloud)** | `MiniMax Music 2.5` | 最新のクラウド生成モデル |
 | **Music (Local)** | `acestep-v15-xl-sft / xl-base` | 既定はXL最高品質、Lego/カバーはXL Base対応 |
 | **Custom Music** | `YuE (Best/Balanced/Fast)` | 専門的な音源生成 |
@@ -194,5 +212,17 @@ cd /home/nttdmse/aipf/music
 
 ---
 
+---
+
 ## 📝 ライセンス
-MIT License - Developed for the Suno AI Community.
+
+MIT License — オリジナルソースコードに適用されます。
+
+```
+This repository is licensed under MIT for original source code.
+External models, APIs, and tools are governed by their respective licenses and terms of use.
+Please check each dependency before commercial or public use.
+```
+
+本プロジェクトは ACE-Step、Seed-VC、BS-RoFormer、Whisper、CLAP、Gemini API など
+多数の外部コンポーネントに依存しています。生成物・モデル・API利用規約はオリジナルコードのMITライセンスとは別です。商用・公開利用前に各依存コンポーネントのライセンスをご確認ください。

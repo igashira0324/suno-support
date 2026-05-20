@@ -256,6 +256,10 @@ async def separate_audio_url(request: SeparateURLRequest):
                 thread = threading.Thread(target=run_separation_task, args=(task_id, final_path), daemon=True)
                 thread.start()
                 
+            except ValueError as ve:
+                logger.warning(f"[{task_id}] SSRF validation failed: {ve}")
+                tasks[task_id]["status"] = "failed"
+                tasks[task_id]["error"] = f"URL not allowed: {ve}"
             except Exception as e:
                 logger.error(f"[{task_id}] Download/Separation failed: {e}")
                 tasks[task_id]["status"] = "failed"
@@ -277,14 +281,10 @@ async def separate_generated_audio(request: SeparateGeneratedRequest):
     Separate a generated audio file (e.g. from ACE-Step) into vocals + instrumental.
     """
     try:
-        raw_url = unquote(request.file_url)
-        logger.info(f"[SeparateGenerated] Incoming file_url: {request.file_url} -> Decoded: {raw_url}")
-        
-        if ":" in raw_url or raw_url.startswith(str(PROJECT_DIR.anchor)):
-            file_path = Path(raw_url)
-        else:
-            relative_path = raw_url.lstrip("/")
-            file_path = (PROJECT_DIR / relative_path).resolve()
+        try:
+            file_path = resolve_web_path(request.file_url)
+        except ValueError as ve:
+            raise HTTPException(status_code=403, detail=str(ve))
             
         logger.info(f"[SeparateGenerated] Resolved file_path: {file_path} (Exists: {file_path.exists()})")
         

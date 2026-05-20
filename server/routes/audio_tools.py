@@ -19,6 +19,7 @@ from core.config import (
     SERVER_DIR, PROJECT_DIR, UPLOAD_DIR, OUTPUT_DIR, MERGED_DIR,
 )
 from core.paths import resolve_web_path
+from core.download import is_safe_url
 
 router = APIRouter()
 
@@ -165,6 +166,8 @@ async def save_file(request: SaveFileRequest):
     try:
         from fastapi.concurrency import run_in_threadpool
         if file_url.startswith("http"):
+            if not is_safe_url(file_url):
+                raise HTTPException(status_code=403, detail=f"URL is not allowed (SSRF Protection): {file_url}")
             def _download():
                 response = requests.get(file_url, stream=True, timeout=10)
                 response.raise_for_status()

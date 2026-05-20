@@ -110,6 +110,9 @@ async def acestep_download_url(request: Request):
         final_path = await download_audio_from_url(url, ACESTEP_SOURCE_DIR)
         return {"path": normalize_acestep_audio_path(str(final_path.resolve()))}
         
+    except ValueError as ve:
+        logger.warning(f"URL validation error: {ve}")
+        raise HTTPException(status_code=403, detail=str(ve))
     except Exception as e:
         logger.error(f"Error downloading URL: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -261,6 +264,9 @@ async def acestep_post_process(request: PostProcessRequest):
             "new_duration": duration_samples / sr,
             "tempo": float(tempo)
         }
+    except ValueError as ve:
+        logger.warning(f"[PostProcess] Path validation error: {ve}")
+        raise HTTPException(status_code=403, detail=str(ve))
     except Exception as e:
         logger.error(f"[PostProcess] Failed: {e}")
         import traceback

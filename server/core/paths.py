@@ -13,6 +13,16 @@ from .config import (
 )
 
 
+def is_safe_path(path: Path | str) -> bool:
+    """Check if the path is a descendant of the PROJECT_DIR to prevent path traversal."""
+    try:
+        resolved = Path(path).resolve()
+        project_resolved = PROJECT_DIR.resolve()
+        return resolved.parts[:len(project_resolved.parts)] == project_resolved.parts
+    except Exception:
+        return False
+
+
 def resolve_web_path(web_path: str) -> Path:
     """Convert a frontend web-path or ACE-STEP URL to a local filesystem Path."""
     # 1. Handle ACE-STEP specific format: .../v1/audio?path=...
@@ -21,31 +31,43 @@ def resolve_web_path(web_path: str) -> Path:
         params = urllib.parse.parse_qs(query)
         if "path" in params:
             file_path_str = urllib.parse.unquote(params["path"][0])
-            return Path(file_path_str)
+            resolved_path = Path(file_path_str)
+            if not is_safe_path(resolved_path):
+                raise ValueError(f"Access denied: path outside project directory: {file_path_str}")
+            return resolved_path
 
     # 2. Standard path handling: Strip full URLs to just the path portion
     cleaned_path = re.sub(r'^https?://[^/]+', '', web_path)
     cleaned_path = urllib.parse.unquote(cleaned_path)
 
     if cleaned_path.startswith("/uploads/"):
-        return UPLOAD_DIR / cleaned_path.replace("/uploads/", "")
+        resolved_path = UPLOAD_DIR / cleaned_path.replace("/uploads/", "")
     elif cleaned_path.startswith("/outputs/"):
-        return OUTPUT_DIR / cleaned_path.replace("/outputs/", "")
+        resolved_path = OUTPUT_DIR / cleaned_path.replace("/outputs/", "")
     else:
         # Fallback
         if ":" in cleaned_path or cleaned_path.startswith(str(PROJECT_DIR.anchor)):
-            return Path(cleaned_path)
+            resolved_path = Path(cleaned_path)
         else:
-            return (PROJECT_DIR / cleaned_path.lstrip("/")).resolve()
+            resolved_path = (PROJECT_DIR / cleaned_path.lstrip("/")).resolve()
+
+    if not is_safe_path(resolved_path):
+        raise ValueError(f"Access denied: path outside project directory: {cleaned_path}")
+    return resolved_path
 
 
 def resolve_fs_path(web_path: str) -> Path:
     """Resolve a simple /uploads/ or /outputs/ web-path to filesystem path."""
     if web_path.startswith("/uploads/"):
-        return UPLOAD_DIR / web_path.replace("/uploads/", "")
+        resolved_path = UPLOAD_DIR / web_path.replace("/uploads/", "")
     elif web_path.startswith("/outputs/"):
-        return OUTPUT_DIR / web_path.replace("/outputs/", "")
-    return Path(web_path)
+        resolved_path = OUTPUT_DIR / web_path.replace("/outputs/", "")
+    else:
+        resolved_path = Path(web_path)
+        
+    if not is_safe_path(resolved_path):
+        raise ValueError(f"Access denied: path outside project directory: {web_path}")
+    return resolved_path
 
 
 def sync_acestep_runtime_source(filename: str) -> str:
