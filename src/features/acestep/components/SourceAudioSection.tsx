@@ -1,17 +1,19 @@
-import React, { useRef, useState, useEffect } from 'react';
-import { Music, Upload, Link2, X, Play, Pause, Loader2, FileAudio } from 'lucide-react';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
+import { Music, Upload, Link2, X, Play, Pause, Loader2, FileAudio, Activity } from 'lucide-react';
 import { AceStepState } from '../types';
 
 interface SourceAudioSectionProps {
     state: AceStepState;
     setState: React.Dispatch<React.SetStateAction<AceStepState>>;
     onExtractLyrics?: () => void;
+    onAnalyzeProfile?: () => void;
 }
 
 export const SourceAudioSection: React.FC<SourceAudioSectionProps> = ({
     state,
     setState,
-    onExtractLyrics
+    onExtractLyrics,
+    onAnalyzeProfile
 }) => {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const audioRef = useRef<HTMLAudioElement>(null);
@@ -118,18 +120,19 @@ export const SourceAudioSection: React.FC<SourceAudioSectionProps> = ({
         return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
     };
 
-    // Get playable source URL for preview
-    const getAudioSource = () => {
-        if (state.coverAudioSourceType === 'upload' && state.coverAudioFile) {
-            return URL.createObjectURL(state.coverAudioFile);
-        }
-        if (state.coverAudioSourceType === 'url' && state.coverAudioUrl) {
-            return state.coverAudioUrl;
-        }
-        return '';
-    };
+    // Playable source URL for preview. Memoized so a new blob URL is not created on
+    // every render, and revoked on change to avoid leaking object URLs.
+    const blobUrl = useMemo(
+        () => (state.coverAudioFile ? URL.createObjectURL(state.coverAudioFile) : ''),
+        [state.coverAudioFile]
+    );
+    useEffect(() => {
+        return () => { if (blobUrl) URL.revokeObjectURL(blobUrl); };
+    }, [blobUrl]);
 
-    const audioSource = getAudioSource();
+    const audioSource = state.coverAudioSourceType === 'upload'
+        ? blobUrl
+        : (state.coverAudioUrl || '');
     const hasAudio = state.coverAudioSourceType === 'upload' ? !!state.coverAudioFile : !!state.coverAudioUrl;
 
     return (
@@ -138,7 +141,11 @@ export const SourceAudioSection: React.FC<SourceAudioSectionProps> = ({
                 <div className="flex items-center gap-2">
                     <Music className="w-4 h-4 text-indigo-400" />
                     <h3 className="text-xs font-black uppercase tracking-widest text-slate-400">
-                        {state.task_type === 'lego' ? 'Instrumental / BGM Audio (既存音源)' : 'Source Audio (原曲・伴奏)'}
+                        {(state.task_type === 'lego' || state.task_type === 'vocal_overlay')
+                            ? 'Instrumental / BGM Audio (既存音源)'
+                            : state.task_type === 'complete'
+                                ? 'Vocal / Single Track (歌・単一トラック)'
+                                : 'Source Audio (原曲・伴奏)'}
                     </h3>
                 </div>
                 <div className="flex bg-slate-950/80 rounded-lg p-0.5 border border-white/5">
@@ -279,6 +286,37 @@ export const SourceAudioSection: React.FC<SourceAudioSectionProps> = ({
                         </button>
                     )}
                 </div>
+            )}
+
+            {/* BPM / Key auto-analysis: locks generation metadata to the source track */}
+            {onAnalyzeProfile && hasAudio && ['cover', 'repaint', 'complete'].includes(state.task_type) && (
+                <button
+                    onClick={onAnalyzeProfile}
+                    disabled={state.isAnalyzingProfile}
+                    className={`w-full py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 border border-cyan-500/20 ${
+                        state.isAnalyzingProfile
+                            ? 'bg-cyan-600/20 text-cyan-300 cursor-wait'
+                            : 'bg-cyan-600/10 hover:bg-cyan-600/20 text-cyan-400'
+                    }`}
+                >
+                    {state.isAnalyzingProfile ? (
+                        <>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            Analyzing BPM / Key...
+                        </>
+                    ) : (
+                        <>
+                            <Activity className="w-3.5 h-3.5" />
+                            曲情報を解析(BPM・キーを自動入力)
+                        </>
+                    )}
+                </button>
+            )}
+            {(state.bpm || state.keyScale) && ['cover', 'repaint', 'complete'].includes(state.task_type) && (
+                <p className="text-[9px] text-cyan-400/80 font-mono text-center">
+                    🎵 {state.bpm ? `${state.bpm} BPM` : ''}{state.bpm && state.keyScale ? ' / ' : ''}{state.keyScale}
+                    <span className="text-slate-600 ml-1">(生成時に固定されます)</span>
+                </p>
             )}
 
             {/* Audio Preview Player */}

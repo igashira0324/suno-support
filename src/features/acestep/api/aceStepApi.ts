@@ -31,9 +31,21 @@ export const aceStepApi = {
       track_name: state.legoTrackName,
       shift: state.shift,
       infer_method: state.infer_method,
+      bpm: state.bpm ?? null,
+      key_scale: state.keyScale || null,
+      time_signature: state.timeSignature || null,
     };
-    
+
     return apiClient.post<{ task_id: string }>('/acestep/generate', params);
+  },
+
+  /**
+   * Analyze an audio source's BPM / key / duration (for metadata locking)
+   */
+  analyzeProfile: async (params: { audio_path?: string; url?: string }) => {
+    return apiClient.post<{ bpm: number | null; key_scale: string | null; duration: number | null }>(
+      '/acestep/analyze-profile', params
+    );
   },
 
   /**
@@ -100,6 +112,27 @@ export const aceStepApi = {
    */
   voiceConvert: async (formData: FormData) => {
     return apiClient.upload<{ task_id: string }>('/acestep/voice-convert', formData);
+  },
+
+  /**
+   * Add AI vocals to an instrumental while preserving the original instrumental exactly.
+   * Returns a task_id polled via getTaskStatus (/task/{id}).
+   */
+  generateVocalsOverlay: async (params: {
+    instrumental_url: string;
+    prompt: string;
+    lyrics: string;
+    language: string;
+    audio_cover_strength: number;
+    vocal_gain: number;
+    master: boolean;
+    inference_steps: number;
+    guidance_scale: number;
+    shift: number;
+    infer_method: string;
+    seed: number;
+  }) => {
+    return apiClient.post<{ task_id: string }>('/acestep/generate-vocals-overlay', params);
   },
 
   /**

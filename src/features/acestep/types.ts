@@ -1,4 +1,4 @@
-export type AceStepTaskType = 'text2music' | 'cover' | 'repaint' | 'lego' | 'lora';
+export type AceStepTaskType = 'text2music' | 'cover' | 'repaint' | 'lego' | 'vocal_overlay' | 'complete' | 'lora';
 
 export interface AceStepState {
     prompt: string;
@@ -40,9 +40,18 @@ export interface AceStepState {
     fadeDuration: number;
     useRandomSeed: boolean;
     legoTrackName: string;
+    // Vocal-overlay mode: preserve original instrumental exactly, layer AI vocals on top
+    vocalGain: number;
+    masterOverlay: boolean;
     shift: number;
     guidance_scale: number;
-    infer_method: 'ode' | 'euler';
+    infer_method: 'ode' | 'sde';
+    // Musical metadata locks: constrained decoding injects these into the LM plan.
+    // null/empty = auto (model decides). Filled manually or via "曲情報を解析".
+    bpm: number | null;
+    keyScale: string;
+    timeSignature: string;
+    isAnalyzingProfile: boolean;
     stylePreset: 'none' | 'suno' | 'realistic' | 'vintage';
     startTime?: number;
     processingTime?: number;

@@ -28,6 +28,15 @@ def release_task(prompt, lyrics, **kwargs):
         "guidance_scale": kwargs.get("guidance_scale", 7.0),
     }
     
+    # Optional musical metadata locks (injected into the LM plan via constrained decoding)
+    if kwargs.get("bpm"):
+        try:
+            payload["bpm"] = int(round(float(kwargs["bpm"])))
+        except (TypeError, ValueError):
+            pass
+    if kwargs.get("key_scale"):
+        payload["key_scale"] = str(kwargs["key_scale"])
+
     # Handle optional sampling mode
     if kwargs.get("sample_mode"):
         payload["sample_mode"] = True
@@ -62,7 +71,28 @@ def release_task(prompt, lyrics, **kwargs):
         payload["repainting_end"] = kwargs.get("repainting_end", -1)
         payload["audio_cover_strength"] = kwargs.get("audio_cover_strength", 0.5)
         payload["instrumental"] = False
-        payload["thinking"] = True
+        # thinking=True: 5Hz LM plans the mix and its codes steer generation (creative, but the
+        # DiT then covers the LM plan instead of listening to the source audio).
+        # thinking=False: DiT conditions directly on the source audio (official lego behavior;
+        # generated track stays aligned with the source in rhythm and harmony).
+        payload["thinking"] = bool(kwargs.get("thinking", True))
+
+    # Handle Complete mode parameters (base model only): add coordinated accompaniment
+    # to a single input track (e.g. vocals -> full song).
+    if kwargs.get("task_type") == "complete":
+        src_audio = kwargs.get("src_audio_path")
+        if src_audio:
+            payload["src_audio_path"] = src_audio
+        track_classes = kwargs.get("complete_track_classes")
+        if track_classes:
+            classes_str = " | ".join(t.upper() for t in track_classes)
+            payload["instruction"] = f"Complete the input track with {classes_str}:"
+        else:
+            payload["instruction"] = "Complete the input track:"
+        # DiT-direct: the model must hear the source to build coordinated accompaniment
+        # (thinking=True would make it cover the LM's blind plan instead).
+        payload["thinking"] = bool(kwargs.get("thinking", False))
+        payload["audio_cover_strength"] = kwargs.get("audio_cover_strength", 0.8)
 
     # Log a truncated version for cleanliness
     log_payload = payload.copy()
@@ -121,15 +151,22 @@ def query_result(task_id):
         data = response.json()
         if data.get("code") == 200 and data.get("data") and len(data["data"]) > 0:
             task_info = data["data"][0]
-            # Result field is a JSON string
+            # Result field is a JSON string (parse for any status: running tasks carry
+            # progress/stage nested inside result[0])
             res_val = task_info.get("result")
-            if task_info.get("status") == 1 and res_val:
-                if isinstance(res_val, str):
-                    try:
-                        task_info["result"] = json.loads(res_val)
-                    except Exception as e:
+            if res_val and isinstance(res_val, str):
+                try:
+                    task_info["result"] = json.loads(res_val)
+                except Exception as e:
+                    if task_info.get("status") == 1:
                         logger.error(f"Failed to parse result JSON string: {e}")
-                # If it's already a list or dict, keep it as is
+            # Surface nested progress/stage (present while the job is running)
+            parsed = task_info.get("result")
+            if isinstance(parsed, list) and parsed and isinstance(parsed[0], dict):
+                if task_info.get("progress") is None and "progress" in parsed[0]:
+                    task_info["progress"] = parsed[0].get("progress")
+                if task_info.get("stage") is None and "stage" in parsed[0]:
+                    task_info["stage"] = parsed[0].get("stage")
             return task_info
         return {"status": 2, "error": f"Invalid API response: {data.get('code')}"}
     except requests.exceptions.ConnectionError:

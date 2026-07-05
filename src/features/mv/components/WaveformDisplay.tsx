@@ -3,8 +3,8 @@ import { Play, Pause, ZoomIn, ZoomOut, Volume2, Repeat, Scissors, Download, Aler
 import { TrackType } from '../types';
 
 interface WaveformDisplayProps {
-    waveformRef: React.RefObject<HTMLDivElement>;
-    timelineRef: React.RefObject<HTMLDivElement>;
+    waveformRef: React.RefObject<HTMLDivElement | null>;
+    timelineRef: React.RefObject<HTMLDivElement | null>;
     isPlaying: boolean;
     onPlayPause: () => void;
     onZoom: (delta: number) => void;

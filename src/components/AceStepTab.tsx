@@ -19,6 +19,7 @@ const AceStepTab: React.FC = () => {
         handleStartVoiceChange,
         handleConvertAndMerge,
         handleExtractLyrics,
+        handleAnalyzeProfile,
         handleDownloadFile,
         handleAnalyzeImage,
         isDownloading
@@ -111,12 +112,13 @@ const AceStepTab: React.FC = () => {
                             </section>
                         )}
 
-                        {/* Source Audio Input (for Cover, Repaint, Lego) */}
-                        {['cover', 'repaint', 'lego'].includes(state.task_type) && (
-                            <SourceAudioSection 
-                                state={state} 
-                                setState={setState} 
+                        {/* Source Audio Input (for Cover, Repaint, Lego, Vocal Overlay, Complete) */}
+                        {['cover', 'repaint', 'lego', 'vocal_overlay', 'complete'].includes(state.task_type) && (
+                            <SourceAudioSection
+                                state={state}
+                                setState={setState}
                                 onExtractLyrics={handleExtractLyrics}
+                                onAnalyzeProfile={handleAnalyzeProfile}
                             />
                         )}
 

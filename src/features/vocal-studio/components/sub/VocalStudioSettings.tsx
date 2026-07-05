@@ -2,10 +2,10 @@ import React from 'react';
 import { AudioLines, Info, FileAudio, Music, SlidersHorizontal, Mic } from 'lucide-react';
 
 interface VocalStudioSettingsProps {
-    guideInstrument: 'piano' | 'guitar' | 'vocals' | 'other';
+    guideInstrument: 'piano' | 'guitar' | 'vocals' | 'other' | 'bass' | 'drums';
     lyrics: string;
     isProcessing: boolean;
-    onInstrumentChange: (inst: 'piano' | 'guitar' | 'vocals' | 'other') => void;
+    onInstrumentChange: (inst: 'piano' | 'guitar' | 'vocals' | 'other' | 'bass' | 'drums') => void;
     onLyricsChange: (lyrics: string) => void;
 }
 

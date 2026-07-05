@@ -1,4 +1,5 @@
 import logging
+import os
 import torch
 from typing import Optional, Dict, List
 
@@ -21,8 +22,11 @@ class WhisperService:
         if self.model is None:
             try:
                 import whisper
-                logger.info(f"Loading Whisper model on {self.device}...")
-                self.model = whisper.load_model("base", device=self.device)
+                # 'small' is a large quality jump over 'base' for sung Japanese lyrics;
+                # override with WHISPER_MODEL=medium etc. if VRAM allows.
+                model_name = os.getenv("WHISPER_MODEL", "small")
+                logger.info(f"Loading Whisper model '{model_name}' on {self.device}...")
+                self.model = whisper.load_model(model_name, device=self.device)
             except ImportError:
                 logger.error("openai-whisper not installed. Please run: pip install openai-whisper")
                 raise Exception("Whisper model not available")

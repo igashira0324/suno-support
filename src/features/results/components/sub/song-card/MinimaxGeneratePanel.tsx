@@ -4,7 +4,7 @@ import { AlertCircle, Loader2, Music2, Check } from 'lucide-react';
 interface MinimaxGeneratePanelProps {
     minimaxAudioUrl?: string;
     isMinimaxGenerating: boolean;
-    minimaxError?: string;
+    minimaxError?: string | null;
     elapsedTime: number;
     title: string;
     onGenerate: () => void;

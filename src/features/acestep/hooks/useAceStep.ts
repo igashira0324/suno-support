@@ -45,9 +45,15 @@ export const useAceStep = () => {
         fadeDuration: 3,
         useRandomSeed: true,
         legoTrackName: 'vocals',
+        vocalGain: 0.95,
+        masterOverlay: false,
         shift: 1.0,
         guidance_scale: 7.0,
         infer_method: 'ode',
+        bpm: null,
+        keyScale: '',
+        timeSignature: '',
+        isAnalyzingProfile: false,
         stylePreset: 'none',
         startTime: undefined,
         processingTime: undefined,
@@ -109,10 +115,18 @@ export const useAceStep = () => {
         return () => clearInterval(interval);
     }, [state.isAceStepReady]);
 
-    // Auto-switch model to base for base-only tasks (lego)
+    // Auto-switch model to base for base-only tasks (lego / vocal_overlay / complete).
+    // Also lift turbo-oriented sampling defaults (8 steps / shift 1.0) to base-sane
+    // values: the base model needs ~32 steps & shift 3.0 or vocals never materialize.
     useEffect(() => {
-        if (state.task_type === 'lego' && state.model !== 'acestep-v15-base') {
-            setState(prev => ({ ...prev, model: 'acestep-v15-base' }));
+        const baseOnly = ['lego', 'vocal_overlay', 'complete'].includes(state.task_type);
+        if (baseOnly && state.model !== 'acestep-v15-base') {
+            setState(prev => ({
+                ...prev,
+                model: 'acestep-v15-base',
+                inference_steps: prev.inference_steps < 16 ? 32 : prev.inference_steps,
+                shift: prev.shift <= 1.0 ? 3.0 : prev.shift,
+            }));
         }
     }, [state.task_type, state.model]);
 
@@ -203,6 +217,51 @@ export const useAceStep = () => {
         }, 2000);
     }, [state.task_type, state.autoTrim, state.fadeDuration]);
 
+    // Poll a generic backend task (/task/{id}) for the vocal-overlay pipeline.
+    const startOverlayPolling = useCallback((taskId: string) => {
+        if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+
+        pollIntervalRef.current = setInterval(async () => {
+            try {
+                const data = await acestepApi.getTaskStatus(taskId);
+                const st = data.status;
+                const progress = data.progress || 0;
+
+                setState(prev => ({
+                    ...prev,
+                    status: st === 'completed' ? 'completed' : st === 'failed' ? 'failed' : 'processing',
+                    progress
+                }));
+
+                if (st === 'completed') {
+                    if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+                    const r = data.result || {};
+                    const files: any[] = [];
+                    if (r.merged_url) files.push({ url: toApiUrl(r.merged_url), label: '歌付与ミックス（元伴奏そのまま）', format: 'mp3' });
+                    if (r.merged_wav_url) files.push({ url: toApiUrl(r.merged_wav_url), label: 'WAV（高音質・ロスレス）', format: 'wav' });
+                    setState(prev => {
+                        const endTime = Date.now();
+                        const pTime = prev.startTime ? (endTime - prev.startTime) / 1000 : r.processing_time;
+                        return {
+                            ...prev,
+                            isGenerating: false,
+                            status: 'completed',
+                            progress: 100,
+                            output_files: files,
+                            processingTime: pTime,
+                            error: files.length === 0 ? '生成は完了しましたが出力ファイルを取得できませんでした。' : null
+                        };
+                    });
+                } else if (st === 'failed') {
+                    if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+                    setState(prev => ({ ...prev, isGenerating: false, status: 'failed', error: data.error || 'Vocal overlay failed' }));
+                }
+            } catch (err: any) {
+                console.error('Overlay polling error:', err);
+            }
+        }, 2000);
+    }, []);
+
     const handleGenerate = async () => {
         // P1: Pre-generation health check
         try {
@@ -221,6 +280,55 @@ export const useAceStep = () => {
         setVisualProgress(0);
 
         try {
+            // Vocal Overlay mode: keep the ORIGINAL instrumental exactly, layer AI vocals on top.
+            if (state.task_type === 'vocal_overlay') {
+                let instPath: string | null = null;
+                if (state.coverAudioSourceType === 'upload' && state.coverAudioFile) {
+                    const up = await acestepApi.uploadSource(state.coverAudioFile);
+                    instPath = up.path;
+                } else if (state.coverAudioSourceType === 'url' && state.coverAudioUrl) {
+                    setState(prev => ({ ...prev, isDownloadingSource: true }));
+                    try {
+                        const dl = await acestepApi.downloadUrl(state.coverAudioUrl);
+                        instPath = dl.path;
+                    } finally {
+                        setState(prev => ({ ...prev, isDownloadingSource: false }));
+                    }
+                }
+
+                if (!instPath) {
+                    setState(prev => ({ ...prev, isGenerating: false, status: 'failed', error: '楽器音源（インストゥルメンタル）をアップロード、またはURLで指定してください。' }));
+                    return;
+                }
+
+                // Apply style presets to the vocal-style prompt
+                let ovPrompt = state.prompt;
+                if (state.stylePreset === 'suno') ovPrompt = `[Suno v4 Style] ${ovPrompt}`;
+                else if (state.stylePreset === 'realistic') ovPrompt = `[High Fidelity, Studio Quality] ${ovPrompt}`;
+                else if (state.stylePreset === 'vintage') ovPrompt = `[Lo-Fi, Analog Warmth, 90s Aesthetic] ${ovPrompt}`;
+
+                const ovData = await acestepApi.generateVocalsOverlay({
+                    instrumental_url: instPath,
+                    prompt: ovPrompt,
+                    lyrics: state.lyrics,
+                    language: state.language,
+                    audio_cover_strength: state.audio_cover_strength,
+                    vocal_gain: state.vocalGain,
+                    master: state.masterOverlay,
+                    inference_steps: state.inference_steps,
+                    guidance_scale: state.guidance_scale,
+                    shift: state.shift,
+                    infer_method: state.infer_method,
+                    seed: state.useRandomSeed ? -1 : state.seed,
+                });
+
+                if (ovData.task_id) {
+                    setState(prev => ({ ...prev, taskId: ovData.task_id, status: 'processing' }));
+                    startOverlayPolling(ovData.task_id);
+                }
+                return;
+            }
+
             // Background Title Gen - Disabled to avoid 429 quota errors
             /*
             generateTitle(state.lyrics, state.theme, state.prompt)
@@ -229,7 +337,7 @@ export const useAceStep = () => {
             */
 
             let srcAudioPath: string | null = null;
-            if (['cover', 'repaint', 'lego'].includes(state.task_type)) {
+            if (['cover', 'repaint', 'lego', 'complete'].includes(state.task_type)) {
                 if (state.coverAudioSourceType === 'upload' && state.coverAudioFile) {
                     const uploadData = await acestepApi.uploadSource(state.coverAudioFile);
                     srcAudioPath = uploadData.path;
@@ -258,7 +366,10 @@ export const useAceStep = () => {
                 ...state,
                 prompt: finalPrompt,
                 src_audio_path: srcAudioPath,
-                reference_audio_path: (state.useAdg && srcAudioPath) ? srcAudioPath : null
+                reference_audio_path: (state.useAdg && srcAudioPath) ? srcAudioPath : null,
+                // lego/complete must hear the source directly (DiT-direct); thinking=true
+                // would make the model cover the LM's blind plan instead of the source.
+                thinking: ['lego', 'complete'].includes(state.task_type) ? false : state.thinking
             });
             
             if (data.task_id) {
@@ -369,6 +480,34 @@ export const useAceStep = () => {
         }
     };
 
+    // Analyze the source audio's BPM / key and lock them into the generation metadata,
+    // so the LM plans music that actually fits the uploaded track.
+    const handleAnalyzeProfile = async () => {
+        setState(prev => ({ ...prev, isAnalyzingProfile: true, error: null }));
+        try {
+            let params: { audio_path?: string; url?: string } | null = null;
+            if (state.coverAudioSourceType === 'upload' && state.coverAudioFile) {
+                const up = await acestepApi.uploadSource(state.coverAudioFile);
+                params = { audio_path: up.path };
+            } else if (state.coverAudioSourceType === 'url' && state.coverAudioUrl) {
+                params = { url: state.coverAudioUrl };
+            }
+            if (!params) {
+                setState(prev => ({ ...prev, isAnalyzingProfile: false, error: '先に音源をアップロード、またはURLを指定してください。' }));
+                return;
+            }
+            const profile = await acestepApi.analyzeProfile(params);
+            setState(prev => ({
+                ...prev,
+                isAnalyzingProfile: false,
+                bpm: profile.bpm ?? prev.bpm,
+                keyScale: profile.key_scale || prev.keyScale,
+            }));
+        } catch (err: any) {
+            setState(prev => ({ ...prev, isAnalyzingProfile: false, error: '曲情報の解析に失敗しました: ' + err.message }));
+        }
+    };
+
     const handleExtractLyrics = async () => {
         const url = state.coverAudioUrl;
         if (!url) {
@@ -436,6 +575,7 @@ export const useAceStep = () => {
         handleStartVoiceChange,
         handleConvertAndMerge,
         handleExtractLyrics,
+        handleAnalyzeProfile,
         handleDownloadFile,
         handleAnalyzeImage,
         isDownloading

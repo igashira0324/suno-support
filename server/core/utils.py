@@ -9,10 +9,20 @@ import urllib.parse
 from pathlib import Path
 from .config import settings
 
+def _resolve_within(base: Path, relative: str) -> Path:
+    """Resolve `relative` under `base`, refusing '..' escapes out of the base dir."""
+    base_resolved = base.resolve()
+    candidate = (base_resolved / relative).resolve()
+    if candidate != base_resolved and not str(candidate).startswith(str(base_resolved) + os.sep):
+        raise ValueError(f"Path escapes {base_resolved}: {relative}")
+    return candidate
+
+
 def resolve_web_path(web_path: str) -> Path:
     if not web_path: return Path("")
-    
+
     # 1. Handle ACE-STEP specific format: .../v1/audio?path=...
+    # (absolute paths are trusted here: this is local inter-service plumbing)
     if "path=" in web_path:
         query = urllib.parse.urlparse(web_path).query
         params = urllib.parse.parse_qs(query)
@@ -23,11 +33,11 @@ def resolve_web_path(web_path: str) -> Path:
     # 2. Standard path handling: Strip full URLs to just the path portion
     cleaned_path = re.sub(r'^https?://[^/]+', '', web_path)
     cleaned_path = urllib.parse.unquote(cleaned_path)
-    
+
     if cleaned_path.startswith("/uploads/"):
-        return settings.upload_dir / cleaned_path.replace("/uploads/", "")
+        return _resolve_within(settings.upload_dir, cleaned_path.replace("/uploads/", "", 1))
     elif cleaned_path.startswith("/outputs/"):
-        return settings.output_dir / cleaned_path.replace("/outputs/", "")
+        return _resolve_within(settings.output_dir, cleaned_path.replace("/outputs/", "", 1))
     else:
         # Fallback to project root or absolute path
         p = Path(cleaned_path)

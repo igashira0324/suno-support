@@ -125,8 +125,12 @@ class AceStepRequest(BaseModel):
     use_adg: bool = False
     reference_audio_path: Optional[str] = None
     track_name: Optional[str] = None
-    shift: float = 0.0
-    infer_method: str = "euler"
+    shift: float = 1.0
+    infer_method: str = "ode"
+    # Optional musical metadata locks (constrained decoding injects them into the LM plan)
+    bpm: Optional[int] = None
+    key_scale: Optional[str] = None
+    time_signature: Optional[str] = None
 
 class PostProcessRequest(BaseModel):
     file_url: str
@@ -154,6 +158,29 @@ class MinimaxRequest(BaseModel):
     lyrics: str
     prompt: str
 
+class VocalOverlayRequest(BaseModel):
+    """Add AI-generated singing to an instrumental while keeping the ORIGINAL
+    instrumental untouched as the mix base (vocals are layered on top)."""
+    instrumental_url: str
+    prompt: str = ""
+    lyrics: str = ""
+    language: str = "ja"
+    # How tightly the generated vocal is bound to the source track (0.1-0.9)
+    audio_cover_strength: float = 0.5
+    # Volume of the overlaid vocal relative to the instrumental
+    vocal_gain: float = 0.95
+    # Optional matchering master pass (off by default: reference is vocal-less)
+    master: bool = False
+    inference_steps: int = 8
+    guidance_scale: float = 7.0
+    shift: float = 1.0
+    infer_method: str = "ode"
+    seed: int = -1
+    # thinking=False (default): DiT listens to the instrumental directly and composes
+    # vocals aligned to it (official lego behavior). thinking=True: the 5Hz LM plans the
+    # song blind and its codes steer generation (more creative, less aligned).
+    thinking: bool = False
+
 # Directories
 UPLOAD_DIR = settings.upload_dir
 OUTPUT_DIR = settings.output_dir
@@ -165,6 +192,8 @@ SEPARATION_DIR = settings.separation_dir
 SEPARATION_DIR.mkdir(parents=True, exist_ok=True)
 VC_DIR = OUTPUT_DIR / "voice_converted"
 VC_DIR.mkdir(parents=True, exist_ok=True)
+OVERLAY_DIR = OUTPUT_DIR / "vocal_overlay"
+OVERLAY_DIR.mkdir(parents=True, exist_ok=True)
 
 # Background Tasks
 def run_separation_task(task_id: str, input_path: Path):
@@ -364,13 +393,16 @@ def run_voice_conversion_task(
         if original_path and original_path.exists():
             try:
                 mg.process(target=str(pre_master), reference=str(original_path), results=[mg.pcm24(str(final_output))])
-            except:
+            except Exception as m_err:
+                logger.warning(f"Mastering failed, using unmastered mix: {m_err}")
                 shutil.copy(pre_master, final_output)
         else:
             shutil.copy(pre_master, final_output)
-            
+
         # Final MP3 Transcoding
         final_mp3 = transcode_to_mp3(final_output)
+        if not final_mp3.exists():
+            raise Exception(f"MP3 transcoding produced no file: {final_mp3}")
 
         tasks[task_id]["status"] = "completed"
         tasks[task_id]["progress"] = 100
@@ -385,6 +417,303 @@ def run_voice_conversion_task(
         logger.error(f"VC failed: {e}")
         tasks[task_id]["status"] = "failed"
         tasks[task_id]["error"] = str(e)
+
+def separate_vocals_stem(input_path: Path, output_dir: Path) -> Optional[Path]:
+    """Run Demucs (htdemucs_ft) and return ONLY the isolated vocals stem path."""
+    from audio_separator.separator import Separator
+    output_dir.mkdir(parents=True, exist_ok=True)
+    separator = Separator(output_dir=str(output_dir), output_format="wav")
+    separator.load_model(model_filename="htdemucs_ft.yaml")
+    output_files = separator.separate(str(input_path))
+    for fname in output_files:
+        if "vocals" in fname.lower():
+            return output_dir / fname
+    return None
+
+
+def _extract_acestep_output_path(result_field) -> Optional[Path]:
+    """Extract a local filesystem path from an ACE-Step query_result 'result' field.
+
+    ACE-Step returns results in several shapes (JSON string, list of dicts, dict).
+    Mirrors the tolerant extraction used by /status but resolves to a real file path.
+    """
+    res = result_field
+    if isinstance(res, str):
+        try:
+            res = json.loads(res)
+        except Exception:
+            try:
+                res = ast.literal_eval(res)
+            except Exception:
+                res = result_field
+
+    files = []
+    if isinstance(res, list):
+        files = res
+    elif isinstance(res, dict):
+        if isinstance(res.get("result"), list):
+            files = res["result"]
+        elif isinstance(res.get("data"), list):
+            files = res["data"]
+        else:
+            files = [res]
+
+    for f in files:
+        raw = None
+        if isinstance(f, str):
+            raw = f
+        elif isinstance(f, dict):
+            raw = (f.get("url") or f.get("file") or f.get("audio_url")
+                   or f.get("audio") or f.get("path") or f.get("output"))
+        if not raw:
+            continue
+        for candidate in (str(raw), normalize_acestep_audio_url(str(raw))):
+            try:
+                p = resolve_web_path(candidate)
+                if p and Path(p).exists():
+                    return Path(p)
+            except Exception:
+                continue
+    return None
+
+
+def analyze_music_profile(audio_path: Path):
+    """Estimate (bpm, key_scale, duration_sec) of an audio file.
+
+    The ACE-Step 5Hz LM plans vocals WITHOUT hearing the source audio, so we lock
+    tempo/key/duration via request metadata (constrained decoding) to make the
+    planned vocals fit the uploaded instrumental.
+    """
+    duration = None
+    try:
+        try:
+            duration = float(librosa.get_duration(path=str(audio_path)))
+        except TypeError:
+            # Older librosa uses filename= instead of path=
+            duration = float(librosa.get_duration(filename=str(audio_path)))
+    except Exception as e:
+        logger.warning(f"Duration analysis failed for {audio_path}: {e}")
+
+    bpm = None
+    key_scale = None
+    try:
+        analysis_window = min(duration, 120.0) if duration else 120.0
+        y, sr = librosa.load(str(audio_path), sr=22050, mono=True, duration=analysis_window)
+
+        tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
+        tempo = float(np.atleast_1d(tempo)[0])
+        if 30 <= tempo <= 300:
+            bpm = int(round(tempo))
+
+        # Krumhansl-Schmuckler key estimation from averaged chroma
+        chroma = librosa.feature.chroma_cqt(y=y, sr=sr).mean(axis=1)
+        major_profile = np.array([6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88])
+        minor_profile = np.array([6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17])
+        pitch_names = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+        best_corr, best_key = -2.0, None
+        for i in range(12):
+            rotated = np.roll(chroma, -i)
+            corr_major = float(np.corrcoef(rotated, major_profile)[0, 1])
+            corr_minor = float(np.corrcoef(rotated, minor_profile)[0, 1])
+            if corr_major > best_corr:
+                best_corr, best_key = corr_major, f"{pitch_names[i]} major"
+            if corr_minor > best_corr:
+                best_corr, best_key = corr_minor, f"{pitch_names[i]} minor"
+        key_scale = best_key
+    except Exception as e:
+        logger.warning(f"Tempo/key analysis failed for {audio_path}: {e}")
+
+    return bpm, key_scale, duration
+
+
+def run_vocal_overlay_task(
+    task_id: str,
+    instrumental_path: Path,
+    prompt: str,
+    lyrics: str,
+    language: str = "ja",
+    audio_cover_strength: float = 0.5,
+    vocal_gain: float = 0.95,
+    master: bool = False,
+    inference_steps: int = 8,
+    guidance_scale: float = 7.0,
+    shift: float = 1.0,
+    infer_method: str = "ode",
+    seed: int = -1,
+    thinking: bool = False,
+):
+    """Generate AI singing for an instrumental, keeping the ORIGINAL instrumental
+    as the exact mix base.
+
+    Pipeline:
+      1. ACE-Step 'lego' generation -> full vocals+instrumental mix (re-rendered).
+      2. Demucs isolates ONLY the vocal stem from that generated mix.
+      3. Overlay that vocal onto the ORIGINAL uploaded instrumental (never re-encoded).
+    """
+    try:
+        start_t = time.time()
+        tasks[task_id]["status"] = "processing"
+        tasks[task_id]["progress"] = 2
+        tasks[task_id]["stage"] = "Analyzing instrumental (BPM/key)"
+
+        # 0) Analyze the instrumental so the LM plans vocals that actually fit it.
+        #    The 5Hz LM cannot hear the source; without these locks it invents its own
+        #    tempo/key/duration and the vocals won't align with the uploaded track.
+        inst_bpm, inst_key, inst_duration = analyze_music_profile(instrumental_path)
+        logger.info(f"[{task_id}] Instrumental profile: bpm={inst_bpm}, key={inst_key}, duration={inst_duration}")
+
+        # This pipeline always runs the BASE model; turbo-oriented defaults from the
+        # frontend (8 steps, shift=1.0) leave the output under-denoised and vocals
+        # never materialize. Clamp to base-sane sampling values.
+        if inference_steps < 16:
+            logger.info(f"[{task_id}] inference_steps={inference_steps} too low for base model, raising to 32")
+            inference_steps = 32
+        if shift <= 1.0:
+            shift = 3.0
+
+        tasks[task_id]["progress"] = 3
+        tasks[task_id]["stage"] = "Generating vocals with ACE-Step"
+
+        # 1) Submit ACE-Step lego generation (source = the instrumental).
+        release = acestep_service.release_task(
+            prompt, lyrics,
+            task_type="lego",
+            src_audio_path=str(instrumental_path),
+            track_name="vocals",
+            model="acestep-v15-base",
+            audio_cover_strength=audio_cover_strength,
+            vocal_language=language,
+            inference_steps=inference_steps,
+            guidance_scale=guidance_scale,
+            shift=shift,
+            infer_method=infer_method,
+            seed=seed,
+            audio_duration=inst_duration if inst_duration and inst_duration > 0 else -1,
+            bpm=inst_bpm,
+            key_scale=inst_key,
+            thinking=thinking,
+        )
+        if release.get("error"):
+            raise Exception(f"ACE-Step generation failed to start: {release.get('error')}")
+        ace_task_id = release.get("task_id") or (release.get("data") or {}).get("task_id")
+        if not ace_task_id:
+            raise Exception("ACE-Step did not return a task_id")
+
+        # 2) Poll ACE-Step until the mix is ready.
+        # Base-model generation is slow on 12GB VRAM (roughly 4-6s of compute per second
+        # of audio at 32 steps), so scale the ceiling with track length instead of a
+        # flat 15 minutes (a 225s track needs ~20 min).
+        gen_timeout = max(900, int((inst_duration or 240) * 8))
+        ace_output = None
+        deadline = time.time() + gen_timeout
+        while time.time() < deadline:
+            if tasks[task_id].get("status") == "cancelled":
+                return
+            info = acestep_service.query_result(ace_task_id)
+            st = info.get("status")
+            if st == 1:
+                ace_output = _extract_acestep_output_path(info.get("result"))
+                break
+            if st in (-1, 2):
+                raise Exception(f"ACE-Step generation failed: {info.get('error')}")
+            # Reflect real ACE-Step progress in the 5-45 band while generating.
+            try:
+                ace_prog = float(info.get("progress") or 0.0)
+                tasks[task_id]["progress"] = min(45, max(5, int(5 + ace_prog * 40)))
+            except (TypeError, ValueError):
+                tasks[task_id]["progress"] = min(45, max(5, tasks[task_id].get("progress", 5) + 1))
+            time.sleep(3)
+
+        if ace_output is None or not ace_output.exists():
+            raise Exception("ACE-Step generation timed out or produced no output")
+
+        tasks[task_id]["progress"] = 50
+        tasks[task_id]["stage"] = "Separating vocal stem"
+
+        # 3) Isolate ONLY the vocal from the generated mix.
+        sep_dir = OVERLAY_DIR / task_id / "separation"
+        vocals_stem = separate_vocals_stem(ace_output, sep_dir)
+        if not vocals_stem or not vocals_stem.exists():
+            raise Exception("Failed to isolate vocal stem from generated audio")
+
+        tasks[task_id]["progress"] = 75
+        tasks[task_id]["stage"] = "Mixing onto original instrumental"
+
+        # 4) Overlay the vocal onto the ORIGINAL instrumental (untouched base).
+        from pedalboard import Pedalboard, Compressor, HighpassFilter
+
+        output_dir = OVERLAY_DIR / task_id
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        vox, sr = librosa.load(str(vocals_stem), sr=None, mono=False)
+        if vox.ndim == 1:
+            vox = vox[np.newaxis, :]
+        inst_audio, _ = librosa.load(str(instrumental_path), sr=sr, mono=False)
+        if inst_audio.ndim == 1:
+            inst_audio = inst_audio[np.newaxis, :]
+
+        # Clean the vocal: gentle compression + high-pass to drop low-end bleed.
+        vocal_proc = Pedalboard([
+            Compressor(threshold_db=-20.0, ratio=3.0, attack_ms=10.0, release_ms=150.0),
+            HighpassFilter(cutoff_frequency_hz=80.0),
+        ])
+        vox = vocal_proc(vox, sr)
+
+        # Match channel counts (vocal may be mono, instrumental stereo or vice versa).
+        if vox.shape[0] != inst_audio.shape[0]:
+            if inst_audio.shape[0] == 1:
+                inst_audio = np.repeat(inst_audio, vox.shape[0], axis=0)
+            elif vox.shape[0] == 1:
+                vox = np.repeat(vox, inst_audio.shape[0], axis=0)
+
+        min_len = min(vox.shape[1], inst_audio.shape[1])
+        mixed = vox[:, :min_len] * float(vocal_gain) + inst_audio[:, :min_len]
+
+        # Prevent clipping without altering the instrumental's balance.
+        max_val = np.max(np.abs(mixed))
+        if max_val > 1.0:
+            mixed = mixed / (max_val + 1e-6)
+
+        pre_master = output_dir / "pre_master.wav"
+        sf.write(str(pre_master), mixed.T, sr)
+
+        final_output = output_dir / "merged_output.wav"
+        if master:
+            try:
+                import matchering as mg
+                mg.process(
+                    target=str(pre_master),
+                    reference=str(instrumental_path),
+                    results=[mg.pcm24(str(final_output))],
+                )
+            except Exception as m_err:
+                logger.warning(f"Mastering failed, using unmastered mix: {m_err}")
+                shutil.copy(pre_master, final_output)
+        else:
+            shutil.copy(pre_master, final_output)
+
+        tasks[task_id]["progress"] = 92
+        tasks[task_id]["stage"] = "Finalizing"
+        overlay_mp3 = transcode_to_mp3(final_output)
+        if not overlay_mp3.exists():
+            raise Exception(f"MP3 transcoding produced no file: {overlay_mp3}")
+
+        tasks[task_id]["status"] = "completed"
+        tasks[task_id]["progress"] = 100
+        tasks[task_id]["result"] = {
+            "merged_url": f"/outputs/vocal_overlay/{task_id}/merged_output.mp3",
+            "merged_wav_url": f"/outputs/vocal_overlay/{task_id}/merged_output.wav",
+            "processing_time": round(time.time() - start_t, 2),
+            "format": "mp3",
+            "bitrate": "320k",
+        }
+    except Exception as e:
+        logger.error(f"Vocal overlay failed for {task_id}: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        tasks[task_id]["status"] = "failed"
+        tasks[task_id]["error"] = str(e)
+
 
 # Endpoints
 @router.post("/upload-source")
@@ -500,7 +829,8 @@ async def acestep_generate(request: AceStepRequest):
         src_audio_path=request.src_audio_path, use_adg=request.use_adg,
         reference_audio_path=request.reference_audio_path, track_name=request.track_name,
         shift=request.shift, infer_method=request.infer_method,
-        guidance_scale=request.guidance_scale
+        guidance_scale=request.guidance_scale,
+        bpm=request.bpm, key_scale=request.key_scale, time_signature=request.time_signature
     )
     if "error" in result and result["error"]:
         logger.error(f"ACE-Step generation error: {result['error']}")
@@ -704,10 +1034,20 @@ async def get_acestep_status(task_id: str):
 
     logger.debug(f"Task {task_id} status: {status}, files: {len(output_files)}")
 
+    # Pass real generation progress through to the UI (ACE-Step reports 0..1).
+    if status == "completed":
+        progress_pct = 100
+    else:
+        try:
+            progress_pct = int(max(0.0, min(1.0, float(result.get("progress") or 0.0))) * 100)
+        except (TypeError, ValueError):
+            progress_pct = 0
+
     return {
         "task_id": task_id,
         "status": status,
-        "progress": 100 if status == "completed" else 0,
+        "progress": progress_pct,
+        "stage": result.get("stage"),
         "output_files": output_files,
         "result": result.get("result"),
         "error": result.get("error")
@@ -799,6 +1139,70 @@ async def acestep_voice_convert(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/generate-vocals-overlay")
+async def acestep_generate_vocals_overlay(request: VocalOverlayRequest, background_tasks: BackgroundTasks):
+    """Add AI singing to an instrumental while keeping the original instrumental
+    byte-exact as the mix base. Returns a task_id polled via /task/{task_id}."""
+    raw = request.instrumental_url
+    inst_path = None
+    if raw:
+        if os.path.isabs(raw) and os.path.exists(raw):
+            inst_path = Path(raw)
+        else:
+            inst_path = resolve_web_path(raw)
+
+    if not inst_path or not inst_path.exists():
+        raise HTTPException(
+            status_code=404,
+            detail="Instrumental audio not found. Upload or provide the instrumental first."
+        )
+
+    task_id = f"ov_{uuid.uuid4().hex[:8]}"
+    tasks[task_id] = {"status": "processing", "progress": 0, "type": "vocal_overlay"}
+    background_tasks.add_task(
+        run_vocal_overlay_task,
+        task_id, inst_path, request.prompt, request.lyrics, request.language,
+        request.audio_cover_strength, request.vocal_gain, request.master,
+        request.inference_steps, request.guidance_scale, request.shift,
+        request.infer_method, request.seed, request.thinking,
+    )
+    return {"task_id": task_id}
+
+class AnalyzeProfileRequest(BaseModel):
+    """Estimate BPM / key / duration of an audio file (for metadata locking)."""
+    audio_path: Optional[str] = None
+    url: Optional[str] = None
+
+
+@router.post("/analyze-profile")
+async def acestep_analyze_profile(request: AnalyzeProfileRequest):
+    """Analyze an uploaded/downloaded audio source and return its musical profile.
+    The frontend uses this to auto-fill BPM / key so the LM plan matches the source."""
+    try:
+        audio_path = None
+        if request.audio_path:
+            if os.path.isabs(request.audio_path) and os.path.exists(request.audio_path):
+                audio_path = Path(request.audio_path)
+            else:
+                audio_path = resolve_web_path(request.audio_path)
+        elif request.url:
+            audio_path = await download_audio_from_url(request.url, ACESTEP_SOURCE_DIR)
+
+        if not audio_path or not Path(audio_path).exists():
+            raise HTTPException(status_code=404, detail="Audio file not found")
+
+        bpm, key_scale, duration = analyze_music_profile(Path(audio_path))
+        return {
+            "bpm": bpm,
+            "key_scale": key_scale,
+            "duration": round(duration, 2) if duration else None,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.post("/extract-lyrics")
 async def acestep_extract_lyrics(request: ExtractLyricsRequest):

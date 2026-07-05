@@ -3,7 +3,7 @@ import { Upload, Music } from 'lucide-react';
 import WaveformPlayer from '../../../../components/WaveformPlayer';
 
 interface VocalStudioUploadProps {
-    fileInputRef: React.RefObject<HTMLInputElement>;
+    fileInputRef: React.RefObject<HTMLInputElement | null>;
     instrumentalFile: File | null;
     instrumentalUrl: string | null;
     isProcessing: boolean;
