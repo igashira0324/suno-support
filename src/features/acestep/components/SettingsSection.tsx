@@ -102,12 +102,18 @@ export const SettingsSection: React.FC<SettingsSectionProps> = ({
                         <select
                             value={state.model}
                             onChange={(e) => setState(prev => ({ ...prev, model: e.target.value }))}
-                            className="w-full bg-slate-950/80 border border-slate-800 rounded-lg px-3 py-2.5 text-[10px] font-bold text-slate-300 focus:outline-none focus:ring-1 focus:ring-indigo-500/50 transition-all"
+                            disabled={state.task_type === 'lego'}
+                            className="w-full bg-slate-950/80 border border-slate-800 rounded-lg px-3 py-2.5 text-[10px] font-bold text-slate-300 focus:outline-none focus:ring-1 focus:ring-indigo-500/50 transition-all disabled:opacity-55 disabled:cursor-not-allowed"
                         >
                             <option value="acestep-v15-turbo">ACE-Step v1.5 Turbo (推奨: 高速・高品質)</option>
                             <option value="acestep-v15-base">ACE-Step v1.5 Base (省メモリ)</option>
                             <option value="acestep-v15-xl">ACE-Step v1.5 XL (最高音質・表現力重視)</option>
                         </select>
+                        {state.task_type === 'lego' && (
+                            <p className="text-[8px] text-amber-400 font-bold bg-amber-500/10 border border-amber-500/20 p-2 rounded-lg leading-relaxed">
+                                ⚠️ Legoモードは「Base」モデルでのみサポートされています。自動でBaseモデルに切り替えました。
+                            </p>
+                        )}
                     </div>
 
                     {/* Inference Steps */}
@@ -267,10 +273,10 @@ export const SettingsSection: React.FC<SettingsSectionProps> = ({
                                 onChange={(e) => setState(prev => ({ ...prev, legoTrackName: e.target.value }))}
                                 className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1.5 text-[10px] font-bold text-amber-300 focus:outline-none"
                             >
-                                <option value="vocals">Vocals (ボーカル抽出)</option>
-                                <option value="drums">Drums (ドラム抽出)</option>
-                                <option value="bass">Bass (ベース抽出)</option>
-                                <option value="other">Other (伴奏・その他)</option>
+                                <option value="vocals">Vocals (ボーカル生成・歌を付与)</option>
+                                <option value="drums">Drums (ドラム生成・追加)</option>
+                                <option value="bass">Bass (ベース生成・追加)</option>
+                                <option value="other">Other (伴奏・他トラック追加)</option>
                             </select>
                         </div>
                         <div className="space-y-1.5">

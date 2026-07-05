@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ACE-Step 1.5 Legoモード (歌付与機能) 図解ガイド</title>
+    <!-- Tailwind CSS for utility styles (embedded) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Mermaid.js for UML diagrams -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <script>
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'dark',
+            securityLevel: 'loose',
+            themeVariables: {
+                background: '#0f172a',
+                primaryColor: '#6366f1',
+                primaryTextColor: '#f8fafc',
+                lineColor: '#475569'
+            }
+        });
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;650;800;900&family=Noto+Sans+JP:wght@400;750;900&display=swap');
+        
+        body {
+            font-family: 'Outfit', 'Noto Sans JP', sans-serif;
+            background-color: #030712;
+        }
+
+        /* Beautiful Neon Gradients */
+        .neon-text-indigo {
+            color: #818cf8;
+            text-shadow: 0 0 10px rgba(129, 140, 248, 0.3);
+        }
+
+        .neon-border-indigo {
+            box-shadow: 0 0 20px rgba(99, 102, 241, 0.15);
+            border: 1px solid rgba(99, 102, 241, 0.2);
+        }
+
+        /* Interactive Pulsing Waveform Animation */
+        .wave-container {
+            display: flex;
+            align-items: center;
+            gap: 3px;
+            height: 40px;
+        }
+
+        .wave-bar {
+            width: 3px;
+            height: 100%;
+            background: linear-gradient(to top, #6366f1, #ec4899);
+            border-radius: 3px;
+            animation: pulse-wave 1.2s ease-in-out infinite alternate;
+        }
+
+        .wave-bar:nth-child(2) { animation-delay: 0.15s; }
+        .wave-bar:nth-child(3) { animation-delay: 0.3s; }
+        .wave-bar:nth-child(4) { animation-delay: 0.45s; }
+        .wave-bar:nth-child(5) { animation-delay: 0.6s; }
+        .wave-bar:nth-child(6) { animation-delay: 0.75s; }
+
+        @keyframes pulse-wave {
+            0% { transform: scaleY(0.2); }
+            100% { transform: scaleY(1.0); }
+        }
+
+        /* Dynamic Glow Background */
+        .glow-sphere-1 {
+            background: radial-gradient(circle, rgba(99, 102, 241, 0.15) 0%, rgba(99, 102, 241, 0) 70%);
+        }
+        .glow-sphere-2 {
+            background: radial-gradient(circle, rgba(236, 72, 153, 0.12) 0%, rgba(236, 72, 153, 0) 70%);
+        }
+    </style>
+</head>
+<body class="text-slate-200 min-h-screen relative overflow-x-hidden pb-16">
+    <!-- Glow Background Elements -->
+    <div class="absolute top-0 left-1/4 w-[600px] h-[600px] glow-sphere-1 pointer-events-none z-0"></div>
+    <div class="absolute bottom-20 right-1/4 w-[700px] h-[700px] glow-sphere-2 pointer-events-none z-0"></div>
+
+    <div class="max-w-4xl mx-auto px-6 pt-12 relative z-10 space-y-12">
+        <!-- Header -->
+        <header class="text-center space-y-4">
+            <div class="inline-flex items-center gap-3 px-4 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/20">
+                <span class="relative flex h-2 w-2">
+                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                    <span class="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
+                </span>
+                <span class="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-400">ACE-Step v1.5 New Feature</span>
+            </div>
+            <h1 class="text-4xl md:text-5xl font-black tracking-tight text-white leading-tight">
+                Legoモード (歌付与機能)<br>
+                <span class="bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-500">
+                    ビジュアル解説・操作ガイド
+                </span>
+            </h1>
+            <p class="text-slate-450 text-sm max-w-xl mx-auto leading-relaxed">
+                アップロードした伴奏（BGM）や楽器音源に対し、歌詞を指定して歌声（Vocal）や別トラックをブレンドして生成する「Lego」機能のワークフローです。
+            </p>
+        </header>
+
+        <!-- Dynamic Animation Showcase -->
+        <section class="neon-border-indigo bg-slate-900/40 rounded-3xl p-6 backdrop-blur-xl flex flex-col md:flex-row items-center justify-between gap-6">
+            <div class="space-y-3">
+                <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                    <span class="w-2.5 h-2.5 rounded-full bg-pink-500"></span>
+                    オーディオ重ね合わせイメージ
+                </h3>
+                <p class="text-xs text-slate-450 leading-relaxed max-w-md">
+                    Lego（マルチトラック生成）は、元の音源の位相やリズムを保ったまま、AIが歌詞のメロディと歌声トラックを自然に合成する高度なインペインティング技術です。
+                </p>
+            </div>
+            <div class="flex items-center gap-4 bg-slate-950/80 px-6 py-4 rounded-2xl border border-white/5 w-full md:w-auto justify-center">
+                <div class="text-right">
+                    <p class="text-[10px] font-bold uppercase tracking-wider text-indigo-400">Lego Vocals Mixing</p>
+                    <p class="text-[9px] text-slate-500">Processing Audio Context...</p>
+                </div>
+                <div class="wave-container">
+                    <div class="wave-bar"></div>
+                    <div class="wave-bar"></div>
+                    <div class="wave-bar"></div>
+                    <div class="wave-bar"></div>
+                    <div class="wave-bar"></div>
+                    <div class="wave-bar"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- UML Flowchart (Mermaid) -->
+        <section class="space-y-4">
+            <h2 class="text-xl font-black uppercase tracking-widest text-slate-400 border-b border-white/5 pb-2">
+                🎵 処理フロー (UML図)
+            </h2>
+            <div class="bg-slate-900/30 rounded-2xl p-6 border border-white/5 overflow-x-auto flex justify-center">
+                <pre class="mermaid bg-transparent">
+graph TD
+    User([ユーザー]) -->|1. 楽器音源をアップロード| UI[フロントエンド UI]
+    User -->|2. 歌詞 & プロンプト入力| UI
+    UI -->|3. タスクモード: Lego / Vocals| Hook[useAceStep]
+    
+    subgraph 自動制御
+        Hook -->|モデルをBaseに自動切替| Model[acestep-v15-base]
+    end
+    
+    UI -->|4. 音源をアップロード| API_Server[FastAPI /acestep/upload-source]
+    API_Server -->|5. ソースパス保存| Exec[ACE-Step 実行エンジン]
+    
+    Exec -->|6. BGMをマスク領域の文脈としてロード| DiT[DiT デコーダー]
+    Exec -->|7. 歌詞・CoTから歌唱ヒント生成| LM[5Hz Language Model]
+    LM -->|hints| DiT
+    DiT -->|8. BGM+歌声を合成 & 生成| Result[完成オーディオ生成]
+    
+    Result -->|9. MP3変換して保存| UI
+    UI -->|10. プレビュー再生 & ダウンロード| User
+                </pre>
+            </div>
+        </section>
+
+        <!-- Step-by-Step Guide -->
+        <section class="space-y-6">
+            <h2 class="text-xl font-black uppercase tracking-widest text-slate-400 border-b border-white/5 pb-2">
+                🚀 ご利用手順
+            </h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <!-- Step 1 -->
+                <div class="bg-slate-900/20 p-5 rounded-2xl border border-white/5 space-y-3">
+                    <div class="w-8 h-8 rounded-lg bg-indigo-600/10 border border-indigo-500/25 flex items-center justify-center text-xs font-black text-indigo-400">
+                        01
+                    </div>
+                    <h3 class="font-bold text-white text-sm">タスクモードにLegoを選択</h3>
+                    <p class="text-xs text-slate-400 leading-relaxed">
+                        右側の「Task Mode」から <strong>lego</strong> を選択します。自動的にモデル設定が <code>Base</code> に切り替わります（LegoはBaseモデルのみ対応）。
+                    </p>
+                </div>
+
+                <!-- Step 2 -->
+                <div class="bg-slate-900/20 p-5 rounded-2xl border border-white/5 space-y-3">
+                    <div class="w-8 h-8 rounded-lg bg-indigo-600/10 border border-indigo-500/25 flex items-center justify-center text-xs font-black text-indigo-400">
+                        02
+                    </div>
+                    <h3 class="font-bold text-white text-sm">既存の楽器・BGMをアップロード</h3>
+                    <p class="text-xs text-slate-400 leading-relaxed">
+                        新設された <strong>Source Audio</strong> エリアにて、歌をのせたい楽器ファイル（MP3/WAVなど）をドラッグ＆ドロップまたは選択して指定します。
+                    </p>
+                </div>
+
+                <!-- Step 3 -->
+                <div class="bg-slate-900/20 p-5 rounded-2xl border border-white/5 space-y-3">
+                    <div class="w-8 h-8 rounded-lg bg-indigo-600/10 border border-indigo-500/25 flex items-center justify-center text-xs font-black text-indigo-400">
+                        03
+                    </div>
+                    <h3 class="font-bold text-white text-sm">歌詞を入力し生成</h3>
+                    <p class="text-xs text-slate-400 leading-relaxed">
+                        歌わせたい歌詞（[Verse 1], [Chorus] 等のタグ含む）を入力し、プロンプトで歌声のスタイル（女性ボーカル、感情豊かなど）を指定し、「Initialize Generation」を押下します。
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Command Execution Bat Guide -->
+        <section class="neon-border-indigo bg-slate-900/20 rounded-2xl p-6 border border-white/5 space-y-4">
+            <h3 class="text-sm font-black uppercase tracking-widest text-indigo-400">
+                💻 Windows アプリ起動用バッチファイル
+            </h3>
+            <p class="text-xs text-slate-400 leading-relaxed">
+                Windows環境ですぐにシステム（FastAPIバックエンド、Viteフロントエンド、ACE-Step APIサーバー）を立ち上げられるよう、プロジェクトルートに専用の起動用バッチファイル <strong><code>run_acestep_lego_app.bat</code></strong> を同梱しています。
+            </p>
+            <div class="bg-slate-950 p-4 rounded-xl border border-white/5">
+                <p class="text-[10px] font-mono text-slate-400">使い方:</p>
+                <ol class="list-decimal list-inside text-xs font-mono text-indigo-300 mt-2 space-y-1">
+                    <li>プロジェクトのルートディレクトリを開きます。</li>
+                    <li><code>run_acestep_lego_app.bat</code> をダブルクリックします。</li>
+                    <li>自動的に必要なサービス（バックエンド、ACE-Step、Vite）が同時起動し、ブラウザでアプリが立ち上がります。</li>
+                </ol>
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <footer class="text-center pt-8 border-t border-white/5 text-[10px] text-slate-650 font-bold uppercase tracking-widest">
+            SunoArchitect Suite &copy; 2026
+        </footer>
+    </div>
+</body>
+</html>

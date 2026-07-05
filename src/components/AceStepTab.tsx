@@ -6,6 +6,7 @@ import { LyricsSection } from '../features/acestep/components/LyricsSection';
 import { SettingsSection } from '../features/acestep/components/SettingsSection';
 import { ResultCard } from '../features/acestep/components/ResultCard';
 import { VoiceChangeDialog } from '../features/acestep/components/VoiceChangeDialog';
+import { SourceAudioSection } from '../features/acestep/components/SourceAudioSection';
 
 const AceStepTab: React.FC = () => {
     const {
@@ -108,6 +109,15 @@ const AceStepTab: React.FC = () => {
                                     ))}
                                 </div>
                             </section>
+                        )}
+
+                        {/* Source Audio Input (for Cover, Repaint, Lego) */}
+                        {['cover', 'repaint', 'lego'].includes(state.task_type) && (
+                            <SourceAudioSection 
+                                state={state} 
+                                setState={setState} 
+                                onExtractLyrics={handleExtractLyrics}
+                            />
                         )}
 
                         {/* Editor */}

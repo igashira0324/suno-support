@@ -109,6 +109,13 @@ export const useAceStep = () => {
         return () => clearInterval(interval);
     }, [state.isAceStepReady]);
 
+    // Auto-switch model to base for base-only tasks (lego)
+    useEffect(() => {
+        if (state.task_type === 'lego' && state.model !== 'acestep-v15-base') {
+            setState(prev => ({ ...prev, model: 'acestep-v15-base' }));
+        }
+    }, [state.task_type, state.model]);
+
     // Smooth progress simulation
     useEffect(() => {
         if (['running', 'queued', 'starting', 'processing'].includes(state.status)) {
